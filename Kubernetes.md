@@ -572,3 +572,486 @@ http://192.168.208.100:30477/
 
 到这里为止，我们就搭建了一个单master的k8s集群
 
+#  使用二进制方式搭建K8S集群
+
+## 注意
+
+**【暂时没有使用二进制方式搭建K8S集群，因此本章节内容不完整... 欢迎小伙伴能补充~】**
+
+## 准备工作
+
+在开始之前，部署Kubernetes集群机器需要满足以下几个条件
+
+- 一台或多台机器，操作系统CentOS 7.x
+- 硬件配置：2GB ，2个CPU，硬盘30GB
+- 集群中所有机器之间网络互通
+- 可以访问外网，需要拉取镜像，如果服务器不能上网，需要提前下载镜像导入节点
+- 禁止swap分区
+
+##  准备虚拟机
+
+首先我们准备了两台虚拟机，来进行安装测试
+
+| 主机名       | ip              |
+| ------------ | --------------- |
+| k8s_2_master | 192.168.208.103 |
+| k8s_2_node   | 192.168.208.104 |
+
+## 操作系统的初始化
+
+然后我们需要进行一些系列的初始化操作
+
+```
+# 关闭防火墙
+systemctl stop firewalld
+systemctl disable firewalld
+
+# 关闭selinux
+# 永久关闭
+sed -i 's/enforcing/disabled/' /etc/selinux/config  
+# 临时关闭
+setenforce 0  
+
+# 关闭swap
+# 临时
+swapoff -a 
+# 永久关闭
+sed -ri 's/.*swap.*/#&/' /etc/fstab
+
+# 根据规划设置主机名【master节点上操作】
+hostnamectl set-hostname k8s_2_master
+# 根据规划设置主机名【node1节点操作】
+hostnamectl set-hostname k8s_2_node1
+
+
+# 在master添加hosts
+cat >> /etc/hosts << EOF
+192.168.208.103 k8s_2_master
+192.168.208.104 k8s_2_node1
+EOF
+
+
+# 将桥接的IPv4流量传递到iptables的链
+cat > /etc/sysctl.d/k8s.conf << EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+# 生效
+sysctl --system  
+
+# 时间同步
+yum install ntpdate -y
+ntpdate time.windows.com
+```
+
+## 部署Etcd集群
+
+Etcd是一个分布式键值存储系统，Kubernetes使用Etcd进行数据存储，所以先准备一个Etcd数据库，为了解决Etcd单点故障，应采用集群方式部署，这里使用3台组建集群，可容忍一台机器故障，当然也可以使用5台组件集群，可以容忍2台机器故障
+
+### 自签证书
+
+提到证书，我们想到的就是下面这个情况
+
+![](https://img-blog.csdnimg.cn/dde1888e036e4f2e9df2207d0bab9f0c.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+这个https证书，其实就是服务器颁发给网站的，代表这是一个安全可信任的网站。
+
+而在我们K8S集群的内部，其实也是有证书的，如果不带证书，那么访问就会受限
+
+![](https://img-blog.csdnimg.cn/af34a6bbb0f64f9c97d8821e67f608bc.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+同时在集群内部 和 外部的访问，我们也需要签发证书
+
+![](https://img-blog.csdnimg.cn/bec54752a9b147f89d62e33136fcfdb4.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+如果我们使用二进制的方式，那么就需要自己手动签发证书。
+
+自签证书：我们可以想象成在一家公司上班，然后会颁发一个门禁卡，同时一般门禁卡有两种，一个是内部员工的门禁卡，和外部访客门禁卡。这两种门禁卡的权限可能不同，员工的门禁卡可以进入公司的任何地方，而访客的门禁卡是受限的，这个门禁卡其实就是自签证书
+
+![](https://img-blog.csdnimg.cn/29a64225a8824525b95b28b80b99e7e1.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_18,color_FFFFFF,t_70,g_se,x_16)
+
+###  准备cfssl证书生成工具
+
+cfssl是一个开源的证书管理工具，使用json文件生成证书，相比openssl 更方便使用。找任意一台服务器操作，这里用Master节点。
+
+```
+yum install wget
+```
+
+```
+wget https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
+wget https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
+wget https://pkg.cfssl.org/R1.2/cfssl-certinfo_linux-amd64
+chmod +x cfssl_linux-amd64 cfssljson_linux-amd64 cfssl-certinfo_linux-amd64
+mv cfssl_linux-amd64 /usr/local/bin/cfssl
+mv cfssljson_linux-amd64 /usr/local/bin/cfssljson
+mv cfssl-certinfo_linux-amd64 /usr/bin/cfssl-certinfo
+chmod +x /usr/bin/cfssl*
+```
+
+#### 生成 Etcd 证书 （1）自签证书颁发机构（CA） 创建工作目录：
+
+```
+mkdir -p ~/TLS/{etcd,k8s}
+
+cd TLS/etcd
+```
+
+#### 自签 CA
+
+```
+cat > ca-config.json << EOF
+{
+  "signing": {
+    "default": {
+      "expiry": "87600h"
+    },
+    "profiles": {
+      "www": {
+         "expiry": "87600h",
+         "usages": [
+            "signing",
+            "key encipherment",
+            "server auth",
+            "client auth"
+        ]
+      }
+    }
+  }
+}
+EOF
+```
+
+```
+cat > ca-csr.json << EOF
+{
+    "CN": "etcd CA",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CN",
+            "L": "Beijing",
+            "ST": "Beijing"
+        }
+    ]
+}
+EOF
+```
+
+#### 生成证书：
+
+```
+cfssl gencert -initca ca-csr.json | cfssljson -bare ca -
+
+ls *pem
+```
+
+#### 使用自签 CA 签发 Etcd HTTPS 证书 创建证书申请文件：(修改对应的master和[node](https://so.csdn.net/so/search?q=node&spm=1001.2101.3001.7020)的IP地址)
+
+
+
+**到此发现生成证书一直失败，无法解决：Failed to parse input: unexpected end of JSON input**
+
+#  Kubeadm和二进制方式对比
+
+## Kubeadm方式搭建K8S集群
+
+- 安装虚拟机，在虚拟机安装Linux操作系统【3台虚拟机】
+- 对操作系统初始化操作
+- 所有节点安装Docker、kubeadm、kubelet、kubectl【包含master和slave节点】
+  - 安装docker、使用yum，不指定版本默认安装最新的docker版本
+  - 修改docker仓库地址，yum源地址，改为阿里云地址
+  - 安装kubeadm，kubelet 和 kubectl
+    - k8s已经发布最新的1.19版本，可以指定版本安装，不指定安装最新版本
+    - `yum install -y kubelet kubeadm kubectl`
+- 在master节点执行初始化命令操作
+  - `kubeadm init`
+  - 默认拉取镜像地址 K8s.gcr.io国内地址，需要使用国内地址
+- 安装网络插件(CNI)
+  - `kubectl apply -f kube-flannel.yml`
+  - 
+- 在所有的node节点上，使用join命令，把node添加到master节点上
+- 测试kubernetes集群
+
+## 二进制方式搭建K8S集群
+
+- 安装虚拟机和操作系统，对操作系统进行初始化操作
+- 生成cfssl 自签证书
+  - `ca-key.pem`、`ca.pem`
+  - `server-key.pem`、`server.pem`
+- 部署Etcd集群
+  - 部署的本质，就是把etcd集群交给 systemd 管理
+  - 把生成的证书复制过来，启动，设置开机启动
+- 为apiserver自签证书，生成过程和etcd类似
+- 部署master组件，主要包含以下组件
+  - apiserver
+  - controller-manager
+  - scheduler
+  - 交给systemd管理，并设置开机启动
+  - 如果要安装最新的1.19版本，下载二进制文件进行安装
+- 部署node组件
+  - docker
+  - kubelet
+  - kube-proxy【需要批准kubelet证书申请加入集群】
+  - 交给systemd管理组件- 组件启动，设置开机启动
+- 批准kubelet证书申请 并加入集群
+- 部署CNI网络插件
+- 测试Kubernets集群【安装nginx测试】
+
+#  Kubernetes集群管理工具kubectl
+
+## 概述
+
+kubectl是Kubernetes集群的命令行工具，通过kubectl能够对集群本身进行管理，并能够在集群上进行容器化应用的安装和部署
+
+## 命令格式
+
+命令格式如下
+
+```
+kubectl [command] [type] [name] [flags]
+```
+
+参数
+
+- command：指定要对资源执行的操作，例如create、get、describe、delete
+- type：指定资源类型，资源类型是大小写敏感的，开发者能够以单数 、复数 和 缩略的形式
+
+例如：
+
+```
+kubectl get pod pod1
+kubectl get pods pod1
+kubectl get po pod1
+```
+
+![](https://img-blog.csdnimg.cn/35ee8f7557d343859c672a550b158912.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_12,color_FFFFFF,t_70,g_se,x_16)
+
+- name：指定资源的名称，名称也是大小写敏感的，如果省略名称，则会显示所有的资源，例如
+
+```
+kubectl get pods
+```
+
+- flags：指定可选的参数，例如，可用 -s 或者 -server参数指定Kubernetes API server的地址和端口
+
+## 常见命令
+
+### kubectl help 获取更多信息
+
+通过 help命令，能够获取帮助信息
+
+```
+# 获取kubectl的命令
+kubectl --help
+
+# 获取某个命令的介绍和使用
+kubectl get --help
+```
+
+### 基础命令
+
+常见的基础命令
+
+| 命令    | 介绍                                           |
+| ------- | ---------------------------------------------- |
+| create  | 通过文件名或标准输入创建资源                   |
+| expose  | 将一个资源公开为一个新的Service                |
+| run     | 在集群中运行一个特定的镜像                     |
+| set     | 在对象上设置特定的功能                         |
+| get     | 显示一个或多个资源                             |
+| explain | 文档参考资料                                   |
+| edit    | 使用默认的编辑器编辑一个资源                   |
+| delete  | 通过文件名，标准输入，资源名称或标签来删除资源 |
+
+### 部署命令
+
+| 命令           | 介绍                                               |
+| -------------- | -------------------------------------------------- |
+| rollout        | 管理资源的发布                                     |
+| rolling-update | 对给定的复制控制器滚动更新                         |
+| scale          | 扩容或缩容Pod数量，Deployment、ReplicaSet、RC或Job |
+| autoscale      | 创建一个自动选择扩容或缩容并设置Pod数量            |
+
+### 集群管理命令
+
+| 命令         | 介绍                           |
+| ------------ | ------------------------------ |
+| certificate  | 修改证书资源                   |
+| cluster-info | 显示集群信息                   |
+| top          | 显示资源(CPU/M)                |
+| cordon       | 标记节点不可调度               |
+| uncordon     | 标记节点可被调度               |
+| drain        | 驱逐节点上的应用，准备下线维护 |
+| taint        | 修改节点taint标记              |
+|              |                                |
+
+### 故障和调试命令
+
+| 命令         | 介绍                                                         |
+| ------------ | ------------------------------------------------------------ |
+| describe     | 显示特定资源或资源组的详细信息                               |
+| logs         | 在一个Pod中打印一个容器日志，如果Pod只有一个容器，容器名称是可选的 |
+| attach       | 附加到一个运行的容器                                         |
+| exec         | 执行命令到容器                                               |
+| port-forward | 转发一个或多个                                               |
+| proxy        | 运行一个proxy到Kubernetes API Server                         |
+| cp           | 拷贝文件或目录到容器中                                       |
+| auth         | 检查授权                                                     |
+
+### 其它命令
+
+| 命令         | 介绍                                                |
+| ------------ | --------------------------------------------------- |
+| apply        | 通过文件名或标准输入对资源应用配置                  |
+| patch        | 使用补丁修改、更新资源的字段                        |
+| replace      | 通过文件名或标准输入替换一个资源                    |
+| convert      | 不同的API版本之间转换配置文件                       |
+| label        | 更新资源上的标签                                    |
+| annotate     | 更新资源上的注释                                    |
+| completion   | 用于实现kubectl工具自动补全                         |
+| api-versions | 打印受支持的API版本                                 |
+| config       | 修改kubeconfig文件（用于访问API，比如配置认证信息） |
+| help         | 所有命令帮助                                        |
+| plugin       | 运行一个命令行插件                                  |
+| version      | 打印客户端和服务版本信息                            |
+
+### 目前使用的命令
+
+```
+# 创建一个nginx镜像
+kubectl create deployment nginx --image=nginx
+
+# 对外暴露端口
+kubectl expose deployment nginx --port=80 --type=NodePort
+
+# 查看资源
+kubectl get pod, svc
+```
+
+#  Kubernetes集群YAML文件详解
+
+## 概述
+
+k8s 集群中对资源管理和资源对象编排部署都可以通过声明样式（YAML）文件来解决，也就是可以把需要对资源对象操作编辑到YAML 格式文件中，我们把这种文件叫做资源清单文件，通过kubectl 命令直接使用资源清单文件就可以实现对大量的资源对象进行编排部署了。一般在我们开发的时候，都是通过配置YAML文件来部署集群的。
+
+YAML文件：就是资源清单文件，用于资源编排
+
+## YAML文件介绍
+
+### YAML概述
+
+YAML ：仍是一种标记语言。为了强调这种语言以数据做为中心，而不是以标记语言为重点。
+
+YAML 是一个可读性高，用来表达数据序列的格式。
+
+### YAML 基本语法
+
+- 使用空格做为缩进
+- 缩进的空格数目不重要，只要相同层级的元素左侧对齐即可
+- 冒号逗号后面也要有空格，一般一个
+- 低版本缩进时不允许使用Tab 键，只允许使用空格
+- 使用#标识注释，从这个字符一直到行尾，都会被解释器忽略
+- 使用 --- 表示新的yaml文件开始
+
+###  YAML 支持的数据结构
+
+#### 对象
+
+键值对的集合，又称为映射(mapping) / 哈希（hashes） / 字典（dictionary）
+
+```
+# 对象类型：对象的一组键值对，使用冒号结构表示
+name: Tom
+age: 18
+
+# yaml 也允许另一种写法，将所有键值对写成一个行内对象
+hash: {name: Tom, age: 18}
+```
+
+#### 数组
+
+```
+# 数组类型：一组连词线开头的行，构成一个数组
+People
+- Tom
+- Jack
+
+# 数组也可以采用行内表示法
+People: [Tom, Jack]
+```
+
+## YAML文件组成部分
+
+主要分为了两部分，一个是控制器的定义 和 被控制的对象
+
+###  控制器的定义
+
+![](https://img-blog.csdnimg.cn/3cd3b4ffc8f640d5b01254f81806ef94.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  被控制的对象
+
+包含一些 镜像，版本、端口等
+
+![](https://img-blog.csdnimg.cn/59d642a61fcc48088bad7363fb1ae00a.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  属性说明
+
+在一个YAML文件的控制器定义中，有很多属性名称
+
+| 属性名称   | 介绍       |
+| ---------- | ---------- |
+| apiVersion | API版本    |
+| kind       | 资源类型   |
+| metadata   | 资源元数据 |
+| spec       | 资源规格   |
+| replicas   | 副本数量   |
+| selector   | 标签选择器 |
+| template   | Pod模板    |
+| metadata   | Pod元数据  |
+| spec       | Pod规格    |
+| containers | 容器配置   |
+
+###  使用kubectl create命令
+
+这种方式一般用于资源没有部署的时候，我们可以直接创建一个YAML配置文件
+
+```
+# 尝试运行,并不会真正的创建镜像
+kubectl create deployment web --image=nginx -o yaml --dry-run
+```
+
+或者我们可以输出到一个文件中
+
+```
+kubectl create deployment web --image=nginx -o yaml --dry-run > hello.yaml
+ls
+```
+
+然后我们就在文件中直接修改即可
+
+![](https://img-blog.csdnimg.cn/fc4cef7304694298869dec70fa9bea46.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  使用kubectl get命令导出yaml文件
+
+使用于已经部署好的项目
+
+可以首先查看一个目前已经部署的镜像
+
+```
+kubectl get deploy
+```
+
+![](https://img-blog.csdnimg.cn/df00ee51bf2342959a06e3c13e071b36.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+然后我们导出 nginx的配置
+
+```
+kubectl get deploy nginx -o=yaml --export > my2.yaml
+```
+
+然后会生成一个 `my2.yaml` 的配置文件
+
