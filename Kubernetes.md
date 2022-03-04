@@ -1055,3 +1055,1685 @@ kubectl get deploy nginx -o=yaml --export > my2.yaml
 
 然后会生成一个 `my2.yaml` 的配置文件
 
+#  Kubernetes核心技术Pod
+
+## Pod概述
+
+Pod是K8S系统中可以创建和管理的最小单元，是资源对象模型中由用户创建或部署的最小资源对象模型，也是在K8S上运行容器化应用的资源对象，其它的资源对象都是用来支撑或者扩展Pod对象功能的，比如控制器对象是用来管控Pod对象的，Service或者Ingress资源对象是用来暴露Pod引用对象的，PersistentVolume资源对象是用来为Pod提供存储等等，K8S不会直接处理容器，而是Pod，Pod是由一个或多个container组成。
+
+Pod是Kubernetes的最重要概念，每一个Pod都有一个特殊的被称为 “根容器”的Pause容器。Pause容器对应的镜像属于Kubernetes平台的一部分，除了Pause容器，每个Pod还包含一个或多个紧密相关的用户业务容器。
+
+![](https://img-blog.csdnimg.cn/ed623794c2ba4b1baca6e0a7cb217bc5.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  Pod基本概念
+
+- 最小部署的单元
+- Pod里面是由一个或多个容器组成【一组容器的集合】
+- 一个pod中的容器是共享网络命名空间
+- Pod是短暂的
+- 每个Pod包含一个或多个紧密相关的用户业务容器
+
+### Pod存在的意义
+
+- 创建容器使用docker，一个docker对应一个容器，一个容器运行一个应用进程
+- Pod是多进程设计，运用多个应用程序，也就是一个Pod里面有多个容器，而一个容器里面运行一个应用程序（可以有多个应用程序，只是目前这样设计方便管理）
+
+![](https://img-blog.csdnimg.cn/fcb736244a294bf3889f78cd66a75165.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+- Pod的存在是为了亲密性应用
+  - 两个应用之间进行交互
+  - 网络之间的调用【通过127.0.0.1 或 socket】
+  - 两个应用之间需要频繁调用
+
+Pod是在K8S集群中运行部署应用或服务的最小单元，它是可以支持多容器的。Pod的设计理念是支持多个容器在一个Pod中共享网络地址和文件系统，可以通过进程间通信和文件共享这种简单高效的方式组合完成服务。同时Pod对多容器的支持是K8S中最基础的设计理念。在生产环境中，通常是由不同的团队各自开发构建自己的容器镜像，在部署的时候组合成一个微服务对外提供服务。
+
+Pod是K8S集群中所有业务类型的基础，可以把Pod看作运行在K8S集群上的小机器人，不同类型的业务就需要不同类型的小机器人去执行。目前K8S的业务主要可以分为以下几种
+
+- 长期伺服型：long-running
+- 批处理型：batch
+- 节点后台支撑型：node-daemon
+- 有状态应用型：stateful application
+
+上述的几种类型，分别对应的小机器人控制器为：Deployment、Job、DaemonSet 和 StatefulSet (后面将介绍控制器)
+
+##  Pod实现机制
+
+主要有以下两大机制
+
+- 共享网络
+- 共享存储
+
+### 共享网络
+
+容器本身之间相互隔离的，一般是通过 **namespace** 和 **group** 进行隔离，那么Pod里面的容器如何实现通信？
+
+关于Pod实现原理，首先会在Pod会创建一个根容器： `pause容器(也叫做info容器)`，然后我们在创建业务容器 【nginx，redis 等】，在我们创建业务容器的时候，会把它添加到 `info容器` 中
+
+通过Pause容器，把其他业务容器加入到 Pause 容器中，让所有业务容器在同一个命名空间内，可以实现网络共享
+
+![](https://img-blog.csdnimg.cn/a60ff990065f4480b14ad130e2798940.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  共享存储
+
+Pod持久化数据，专门存储到某个地方中
+
+![](https://img-blog.csdnimg.cn/7aa30500d4934fafb3324854365fc252.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+使用 Volumn数据卷进行共享存储，案例如下所示
+
+![](https://img-blog.csdnimg.cn/365fa7cdc47d4a5b9a27723805947aed.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  Pod镜像拉取策略
+
+我们以具体实例来说，拉取策略就是 `imagePullPolicy`
+
+![](https://img-blog.csdnimg.cn/17489752c987457e826712789eb1f9d8.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_18,color_FFFFFF,t_70,g_se,x_16)
+
+拉取策略主要分为了以下几种
+
+- IfNotPresent：默认值，镜像在宿主机上不存在才拉取
+- Always：每次创建Pod都会重新拉取一次镜像
+- Never：Pod永远不会主动拉取这个镜像
+
+## Pod资源限制
+
+也就是我们Pod在进行调度的时候，可以对调度的资源进行限制，例如我们限制 Pod调度是使用的资源是 2C4G，那么在调度对应的node节点时，只会占用对应的资源，对于不满足资源的节点，将不会进行调度
+
+本身还是由 Docker 做到
+
+![](https://img-blog.csdnimg.cn/d72964336d4d4e0ab0fd07eec3531edd.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+### 示例
+
+我们在下面的地方进行资源的限制
+
+![](https://img-blog.csdnimg.cn/ccefc105ce2e4e5bbab53dfdc4f03dfb.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_15,color_FFFFFF,t_70,g_se,x_16)
+
+这里分了两个部分
+
+- request：表示调度所需的资源
+- limits：表示最大所占用的资源
+
+## Pod重启机制
+
+因为Pod中包含了很多个容器，假设某个容器出现问题了，那么就会触发Pod重启机制
+
+![](https://img-blog.csdnimg.cn/3deac433f1fb4ae19030f47f3487f67d.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_19,color_FFFFFF,t_70,g_se,x_16)
+
+重启策略主要分为以下三种
+
+- Always：当容器终止退出后，总是重启容器，默认策略 【nginx等，需要不断提供服务】
+- OnFailure：当容器异常退出（退出状态码非0）时，才重启容器。
+- Never：当容器终止退出，从不重启容器 【批量任务】
+
+##  Pod健康检查
+
+通过容器检查，原来我们使用下面的命令来检查
+
+```
+kubectl get pods
+```
+
+但是有的时候，程序可能出现了 **Java** 堆内存溢出，程序还在运行，但是不能对外提供服务了，这个时候就不能通过 容器检查来判断服务是否可用了
+
+这个时候就可以使用应用层面的检查
+
+```
+# 存活检查，如果检查失败，将杀死容器，根据Pod的restartPolicy【重启策略】来操作
+livenessProbe
+
+# 就绪检查，如果检查失败，Kubernetes会把Pod从Service endpoints中剔除
+readinessProbe
+```
+
+![](https://img-blog.csdnimg.cn/e6c26278754d4728aaa77712109ca44e.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_17,color_FFFFFF,t_70,g_se,x_16)
+
+Probe支持以下三种检查方式
+
+- http Get：发送HTTP请求，返回200 - 400 范围状态码为成功
+- exec：执行Shell命令返回状态码是0为成功
+- tcpSocket：发起TCP Socket建立成功
+
+##  Pod调度策略
+
+```
+kubectl get pods  查看
+kubectl get pods -o wide  详细查看
+```
+
+###  创建Pod流程
+
+- 首先创建一个pod，然后创建一个API Server 和 Etcd【把创建出来的信息存储在etcd中】
+- 然后创建 Scheduler，监控API Server是否有新的Pod，如果有的话，会通过调度算法，把pod调度某个node上
+- 在node节点，会通过 `kubelet -- apiserver `读取etcd 拿到分配在当前node节点上的pod，然后通过docker创建容器
+
+![](https://img-blog.csdnimg.cn/4226ba276eeb44c58a877548ecb718e7.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+### 影响Pod调度的属性
+
+Pod资源限制对Pod的调度会有影响
+
+#### 根据request找到足够node节点进行调度
+
+![](https://img-blog.csdnimg.cn/8d4233b1338b435e88b7c86a42e4ed00.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_15,color_FFFFFF,t_70,g_se,x_16)
+
+####  节点选择器标签影响Pod调度
+
+![](https://gitee.com/moxi159753/LearningNotes/raw/master/K8S/8_Kubernetes%E6%A0%B8%E5%BF%83%E6%8A%80%E6%9C%AFPod/images/image-20201114202456151.png)
+
+关于节点选择器，其实就是有两个环境，然后环境之间所用的资源配置不同
+
+![](https://img-blog.csdnimg.cn/870dfae6a3f34fdbb464b586db49ba9a.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+我们可以通过以下命令，给我们的节点新增标签，然后节点选择器就会进行调度了
+
+```
+kubectl label node k8snode1 env_role=prod
+
+kubectl get nodes k8snode1 --show-labels  查看
+```
+
+####  节点亲和性
+
+节点亲和性 **nodeAffinity** 和 之前nodeSelector 基本一样的，根据节点上标签约束来决定Pod调度到哪些节点上
+
+- 硬亲和性：约束条件必须满足
+- 软亲和性：尝试满足，不保证
+
+![](https://img-blog.csdnimg.cn/4ad8fc4ef13b4ad1a2cf36c141ed844d.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+operator : 支持常用操作符：in、NotIn、Exists、Gt、Lt、DoesNotExists
+
+反亲和性：就是和亲和性刚刚相反，如 NotIn、DoesNotExists等
+
+##  污点和污点容忍
+
+### 概述
+
+nodeSelector 和 NodeAffinity，都是Pod调度到某些节点上，是属于Pod的属性，是在调度的时候实现的。
+
+Taint 污点：节点不做普通分配调度，是节点属性
+
+### 场景
+
+- 专用节点【限制ip】
+- 配置特定硬件的节点【固态硬盘】
+- 基于Taint驱逐【在node1不放，在node2放】
+
+###  查看污点情况
+
+```
+kubectl describe node k8smaster | grep Taint
+```
+
+![](https://img-blog.csdnimg.cn/fb8323f8ed824b3d9029acea1cee232b.png)
+
+污点值有三个
+
+- NoSchedule：一定不被调度
+- PreferNoSchedule：尽量不被调度【也有被调度的几率】
+- NoExecute：不会调度，并且还会驱逐Node已有Pod，比如从node1驱逐到node2
+
+### 为节点添加污点
+
+```
+kubectl taint node [node] key=value:污点的三个值
+```
+
+举例：
+
+```
+kubectl taint node k8snode1 env_role=yes:NoSchedule
+```
+
+### 删除污点
+
+```
+kubectl taint node k8snode1 env_role:NoSchedule-
+```
+
+![](https://img-blog.csdnimg.cn/c4aef7e44ca64b3a9644c19594685dde.png)
+
+###  演示
+
+我们现在创建多个Pod，查看最后分配到Node上的情况
+
+首先我们创建一个 nginx 的pod
+
+```
+kubectl create deployment web --image=nginx
+```
+
+然后使用命令查看
+
+```
+kubectl get pods -o wide
+```
+
+![](https://img-blog.csdnimg.cn/96916ffa45fb4d7b9185d0f095dca834.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+我们可以非常明显的看到，这个Pod已经被分配到 k8snode1 节点上了
+
+下面我们把pod复制5份，在查看情况pod情况
+
+```
+kubectl scale deployment web --replicas=5
+```
+
+我们可以发现，因为master节点存在污点的情况，所以节点都被分配到了 node1 和 node2节点上
+
+![](https://img-blog.csdnimg.cn/ef7df0b156d344bdac965b91c6f63bf3.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+我们可以使用下面命令，把刚刚我们创建的pod都删除
+
+```
+kubectl delete deployment web
+kubectl get pods  查看web已经全部删掉
+```
+
+现在给了更好的演示污点的用法，我们现在给 node1节点打上污点
+
+```
+kubectl taint node k8snode1 env_role=yes:NoSchedule
+```
+
+然后我们查看污点是否成功添加
+
+```
+kubectl describe node k8snode1 | grep Taint
+```
+
+![](https://img-blog.csdnimg.cn/5e3b1278a4e8465c8c5f3e0fde7e0863.png)
+
+然后我们在创建一个 pod
+
+```
+# 创建nginx pod
+kubectl create deployment web --image=nginx
+# 复制五次
+kubectl scale deployment web --replicas=5
+```
+
+然后我们在进行查看
+
+```
+kubectl get pods -o wide
+```
+
+我们能够看到现在所有的pod都被分配到了 k8snode2上，因为刚刚我们给node1节点设置了污点
+
+![](https://img-blog.csdnimg.cn/a44144abe46f4e2fa3459dd711de8067.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+最后我们可以删除刚刚添加的污点
+
+```
+kubectl taint node k8snode1 env_role:NoSchedule-
+kubectl describe node k8snode1 | grep Taint
+```
+
+### 污点容忍
+
+污点容忍就是某个节点可能被调度，也可能不被调度
+
+![](https://img-blog.csdnimg.cn/6efda845027e4e169cb4146079fa921f.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_12,color_FFFFFF,t_70,g_se,x_16)
+
+这里的key是刚才设置的，比如 key 是 env_role ，而 value 是yes
+
+#  Kubernetes核心技术-Controller
+
+## 内容
+
+- 什么是Controller
+- Pod和Controller的关系
+- Deployment控制器应用场景
+- yaml文件字段说明
+- Deployment控制器部署应用
+- 升级回滚
+- 弹性伸缩
+
+## 什么是Controller
+
+Controller是在集群上管理和运行容器的对象，Controller是实际存在的，Pod是虚拟机的
+
+## Pod和Controller的关系
+
+Pod是通过Controller实现应用的运维，比如弹性伸缩，滚动升级等
+
+Pod 和 Controller之间是通过 label 和 selector 标签来建立关系，同时Controller又被称为控制器工作负载
+
+![](https://img-blog.csdnimg.cn/c750a9599cb247629d8edfe8c6a2c6cc.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  Deployment控制器应用
+
+- Deployment控制器可以部署无状态应用
+- 管理Pod和ReplicaSet
+- 部署，滚动升级等功能
+- 应用场景：web服务，微服务
+
+Deployment表示用户对K8S集群的一次更新操作。Deployment是一个比RS( Replica Set, RS) 应用模型更广的 API 对象，可以是创建一个新的服务，更新一个新的服务，也可以是滚动升级一个服务。滚动升级一个服务，实际是创建一个新的RS，然后逐渐将新 RS 中副本数增加到理想状态，将旧RS中的副本数减少到0的复合操作。
+
+这样一个复合操作用一个RS是不好描述的，所以用一个更通用的Deployment来描述。以K8S的发展方向，未来对所有长期伺服型的业务的管理，都会通过Deployment来管理。
+
+##  Deployment部署应用
+
+之前我们也使用Deployment部署过应用，如下代码所示
+
+```
+kubectrl create deployment web --image=nginx
+```
+
+但是上述代码不是很好的进行复用，因为每次我们都需要重新输入代码，所以我们都是通过YAML进行配置
+
+但是我们可以尝试使用上面的代码创建一个镜像【只是尝试，不会创建】
+
+```
+kubectl create deployment web --image=nginx --dry-run -o yaml > web.yaml
+```
+
+然后输出一个yaml配置文件 `web.yml` ，配置文件如下所示
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: web
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: web
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        resources: {}
+status: {}
+```
+
+我们看到的 selector 和 label 就是我们Pod 和 Controller之间建立关系的桥梁
+
+![](https://img-blog.csdnimg.cn/1ad3d92fa00b4edda62c1e71a342c3c7.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_11,color_FFFFFF,t_70,g_se,x_16)
+
+###  使用YAML创建Pod
+
+通过刚刚的代码，我们已经生成了YAML文件，下面我们就可以使用该配置文件快速创建Pod镜像了
+
+```
+kubectl apply -f web.yaml
+```
+
+![](https://img-blog.csdnimg.cn/85b7ff9e8f7b4c6ba760651d43a14118.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+但是因为这个方式创建的，我们只能在集群内部进行访问，所以我们还需要对外暴露端口
+
+```
+kubectl expose deployment web --port=80 --type=NodePort --target-port=80 --name=web1
+```
+
+关于上述命令，有几个参数
+
+- --port：就是我们内部的端口号
+- --target-port：是pod上的端口
+- --name：名称
+- --type：类型
+
+指定了 --type=NodePort，随机分配30000 以上的端口号
+
+同理，我们一样可以导出对应的配置文件
+
+```
+kubectl expose deployment web --port=80 --type=NodePort --target-port=80 --name=web1 -o yaml > web1.yaml
+```
+
+得到的web1.yaml如下所示
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2020-11-16T02:26:53Z"
+  labels:
+    app: web
+  managedFields:
+  - apiVersion: v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:labels:
+          .: {}
+          f:app: {}
+      f:spec:
+        f:externalTrafficPolicy: {}
+        f:ports:
+          .: {}
+          k:{"port":80,"protocol":"TCP"}:
+            .: {}
+            f:port: {}
+            f:protocol: {}
+            f:targetPort: {}
+        f:selector:
+          .: {}
+          f:app: {}
+        f:sessionAffinity: {}
+        f:type: {}
+    manager: kubectl
+    operation: Update
+    time: "2020-11-16T02:26:53Z"
+  name: web2
+  namespace: default
+  resourceVersion: "113693"
+  selfLink: /api/v1/namespaces/default/services/web2
+  uid: d570437d-a6b4-4456-8dfb-950f09534516
+spec:
+  clusterIP: 10.104.174.145
+  externalTrafficPolicy: Cluster
+  ports:
+  - nodePort: 32639
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: web
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}
+```
+
+然后我们可以通过下面的命令来查看对外暴露的服务
+
+```
+kubectl get pods,svc
+```
+
+![](https://img-blog.csdnimg.cn/d7ce4c2c00ac45439a5e9f9e16efe398.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+然后我们访问对应的url，即可看到 nginx了 `http://192.168.208.100:30044/`
+
+##  升级回滚和弹性伸缩
+
+- 升级： 假设从版本为1.14 升级到 1.15 ，这就叫应用的升级【升级可以保证服务不中断】
+- 回滚：从版本1.15 变成 1.14，这就叫应用的回滚
+- 弹性伸缩：我们根据不同的业务场景，来改变Pod的数量对外提供服务，这就是弹性伸缩
+
+### 应用升级和回滚
+
+首先删掉所有创建的pod。我们先创建一个 1.14版本的Pod
+
+打开之前创建的 web.yaml
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: web
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: web
+    spec:
+      containers:
+      - image: nginx:1.14
+        name: nginx
+        resources: {}
+status: {}
+```
+
+指定nginx版本为1.14，然后开始创建我们的Pod
+
+![](https://img-blog.csdnimg.cn/3f5df926722f4983b8b0b46e798f7d32.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+```
+kubectl apply -f nginx.yaml
+```
+
+同时，我们使用docker images命令，就能看到我们成功拉取到了一个 1.14版本的镜像
+
+![](https://img-blog.csdnimg.cn/4e7b9638a195451faf2aad2afcc185c5.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+随机分配的节点
+
+我们使用下面的命令，可以将nginx从 1.14 升级到 1.15
+
+```
+kubectl set image deployment web nginx=nginx:1.15
+```
+
+在我们执行完命令后，能看到升级的过程
+
+```
+kubectl get pods（master节点）
+docker images(在对应节点)
+```
+
+![](https://img-blog.csdnimg.cn/31c2ffd5d61b470e9d4a99df0ae058ba.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+此时镜像拉取到node1节点
+
+- 首先是开始的nginx 1.14版本的Pod在运行，然后 1.15版本的在创建
+- 然后在1.15版本创建完成后，就会暂停1.14版本
+- 最后把1.14版本的Pod移除，完成我们的升级
+
+我们在下载 1.15版本，容器就处于ContainerCreating状态，然后下载完成后，就用 1.15版本去替换1.14版本了，这么做的好处就是：升级可以保证服务不中断
+
+![](https://img-blog.csdnimg.cn/9d0cbbac471a402c8014c5c675747e83.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+我们到我们的node1节点上，查看我们的 docker images;
+
+能够看到，我们已经成功拉取到了 1.15版本的nginx了
+
+####  查看升级状态
+
+下面可以，查看升级状态
+
+```
+kubectl rollout status deployment web
+```
+
+![](https://img-blog.csdnimg.cn/8c04f4f3add74b1992634cfcbc6680fb.png)
+
+#### 查看历史版本
+
+我们还可以查看历史版本
+
+```
+kubectl rollout history deployment web
+```
+
+#### 应用回滚
+
+我们可以使用下面命令，完成回滚操作，也就是回滚到上一个版本
+
+```
+kubectl rollout undo deployment web
+```
+
+然后我们就可以查看状态
+
+```
+kubectl rollout status deployment web
+```
+
+![](https://img-blog.csdnimg.cn/f98104f6890f438a99cb13b33e1a732a.png)
+
+同时我们还可以回滚到指定版本
+
+```
+kubectl rollout history deployment web
+kubectl rollout undo deployment web --to-revision=2
+```
+
+![](https://img-blog.csdnimg.cn/45a600ee35e74d8891ae532c470fca51.png)
+
+### 弹性伸缩
+
+弹性伸缩，也就是我们通过命令一下创建多个副本
+
+```
+kubectl scale deployment web --replicas=10
+```
+
+能够清晰看到，我们一下创建了10个副本
+
+![](https://img-blog.csdnimg.cn/ed04afd8625b4d98803f57731bfefc9d.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_19,color_FFFFFF,t_70,g_se,x_16)
+
+#  Kubernetes核心技术Service
+
+## 前言
+
+前面我们了解到 Deployment 只是保证了支撑服务的微服务Pod的数量，但是没有解决如何访问这些服务的问题。一个Pod只是一个运行服务的实例，随时可能在一个节点上停止，在另一个节点以一个新的IP启动一个新的Pod，因此不能以确定的IP和端口号提供服务。
+
+要稳定地提供服务需要服务发现和负载均衡能力。服务发现完成的工作，是针对客户端访问的服务，找到对应的后端服务实例。在K8S集群中，客户端需要访问的服务就是Service对象。每个Service会对应一个集群内部有效的虚拟IP，集群内部通过虚拟IP访问一个服务。
+
+在K8S集群中，微服务的负载均衡是由kube-proxy实现的。kube-proxy是k8s集群内部的负载均衡器。它是一个分布式代理服务器，在K8S的每个节点上都有一个；这一设计体现了它的伸缩性优势，需要访问服务的节点越多，提供负载均衡能力的kube-proxy就越多，高可用节点也随之增多。与之相比，我们平时在服务器端使用反向代理作负载均衡，还要进一步解决反向代理的高可用问题。
+
+## Service存在的意义
+
+###  防止Pod失联【服务发现】
+
+因为Pod每次创建都对应一个IP地址，而这个IP地址是短暂的，每次随着Pod的更新都会变化，假设当我们的前端页面有多个Pod时候，同时后端也多个Pod，这个时候，他们之间的相互访问，就需要通过注册中心，拿到Pod的IP地址，然后去访问对应的Pod
+
+![](https://img-blog.csdnimg.cn/0e0849967c634e93877378d863ec3fd4.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  定义Pod访问策略【负载均衡】
+
+页面前端的Pod访问到后端的Pod，中间会通过Service一层，而Service在这里还能做负载均衡，负载均衡的策略有很多种实现策略，例如：
+
+- 随机
+- 轮询
+- 响应比
+
+![](https://img-blog.csdnimg.cn/1930d20612a044efa1fd8db67667cb30.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_15,color_FFFFFF,t_70,g_se,x_16)
+
+## Pod和Service的关系
+
+这里Pod 和 Service 之间还是根据 label 和 selector 建立关联的 【和Controller一样】
+
+![](https://img-blog.csdnimg.cn/1a7f691fc9494c6bab4cf43dfb2e6cf1.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+我们在访问service的时候，其实也是需要有一个ip地址，这个ip肯定不是pod的ip地址，而是 虚拟IP `vip`
+
+##  Service常用类型
+
+Service常用类型有三种
+
+- ClusterIp：集群内部访问
+- NodePort：对外访问应用使用
+- LoadBalancer：对外访问应用使用，公有云
+
+### 举例
+
+我们可以导出一个文件 包含service的配置信息
+
+```
+kubectl expose deployment web --port=80 --target-port=80 --dry-run -o yaml > service.yaml
+```
+
+service.yaml 如下所示
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: web
+  name: web
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: web
+status:
+  loadBalancer: {}
+```
+
+如果我们没有做设置的话，默认使用的是第一种方式 ClusterIP，也就是只能在集群内部使用，我们可以添加一个type字段，用来设置我们的service类型,名字也改为web1
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: web
+  name: web1
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: web
+  type: NodePort
+status:
+  loadBalancer: {}
+```
+
+修改完命令后，我们使用创建一个pod
+
+```
+kubectl apply -f service.yaml
+```
+
+然后能够看到，已经成功修改为 NodePort类型了
+
+```yaml
+kubectl get svc
+```
+
+最后剩下的一种方式就是LoadBalanced：对外访问应用使用公有云
+
+node一般是在内网进行部署，而外网一般是不能访问到的，那么如何访问的呢？
+
+- 找到一台可以通过外网访问机器，安装nginx，反向代理
+- 手动把可以访问的节点添加到nginx中
+
+如果我们使用LoadBalancer，就会有负载均衡的控制器，类似于nginx的功能，就不需要自己添加到nginx上
+
+#  Kubernetes控制器Controller详解
+
+## Statefulset
+
+Statefulset主要是用来部署有状态应用
+
+对于StatefulSet中的Pod，每个Pod挂载自己独立的存储，如果一个Pod出现故障，从其他节点启动一个同样名字的Pod，要挂载上原来Pod的存储继续以它的状态提供服务。
+
+### 无状态应用
+
+我们原来使用 deployment，部署的都是无状态的应用，那什么是无状态应用？
+
+- 认为Pod都是一样的
+- 没有顺序要求
+- 不考虑应用在哪个node上运行
+- 能够进行随意伸缩和扩展
+
+### 有状态应用
+
+上述的因素都需要考虑到
+
+- 让每个Pod独立的
+- 让每个Pod独立的，保持Pod启动顺序和唯一性
+- 唯一的网络标识符，持久存储
+- 有序，比如mysql中的主从
+
+适合StatefulSet的业务包括数据库服务MySQL 和 PostgreSQL，集群化管理服务Zookeeper、etcd等有状态服务
+
+StatefulSet的另一种典型应用场景是作为一种比普通容器更稳定可靠的模拟虚拟机的机制。传统的虚拟机正是一种有状态的宠物，运维人员需要不断地维护它，容器刚开始流行时，我们用容器来模拟虚拟机使用，所有状态都保存在容器里，而这已被证明是非常不安全、不可靠的。
+
+使用StatefulSet，Pod仍然可以通过漂移到不同节点提供高可用，而存储也可以通过外挂的存储来提供 高可靠性，StatefulSet做的只是将确定的Pod与确定的存储关联起来保证状态的连续性。
+
+### 部署有状态应用
+
+需要一个无头service， ClusterIP：none（类似Mysql主从的主）
+
+这里就需要使用 StatefulSet部署有状态应用
+
+![](https://img-blog.csdnimg.cn/c46c141685f847c49c261e40a7591fdc.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_11,color_FFFFFF,t_70,g_se,x_16)
+
+![](https://img-blog.csdnimg.cn/030cba3a9ff940d89f76a984db1b0671.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_16,color_FFFFFF,t_70,g_se,x_16)
+
+创建pod
+
+```
+kubectl apply -f sys.yaml
+kubectl get pods
+```
+
+然后通过查看pod，能否发现每个pod都有唯一的名称
+
+![](https://img-blog.csdnimg.cn/fcff0fb3feb14c1b84a0e0c87d0a48fd.png)
+
+然后我们在查看service，发现是无头的service
+
+```
+kubectl get svc
+```
+
+![](https://img-blog.csdnimg.cn/c14c9120e4d24e98b557468376edd1c1.png)
+
+statefulset 与 deployment 的区别：
+
+- statefulset：根据主机名 + 按照一定规则生成域名
+
+每个pod有唯一的主机名，并且有唯一的域名
+
+- 格式：主机名称.service名称.名称空间.svc.cluster.local
+- 举例：nginx-statefulset-0.default.svc.cluster.local
+
+##  DaemonSet
+
+DaemonSet 即后台支撑型服务，主要是用来部署守护进程
+
+长期伺服型和批处理型的核心在业务应用，可能有些节点运行多个同类业务的Pod，有些节点上又没有这类的Pod运行；而后台支撑型服务的核心关注点在K8S集群中的节点(物理机或虚拟机)，要保证每个节点上都有一个此类Pod运行。节点可能是所有集群节点，也可能是通过 nodeSelector选定的一些特定节点。典型的后台支撑型服务包括：存储、日志和监控等。在每个节点上支撑K8S集群运行的服务。
+
+守护进程在我们每个节点上，运行的是同一个pod，新加入的节点也运行同一个pod
+
+- 例子：在每个node节点安装数据采集工具
+
+首先删掉前面的，可以不删
+
+![](https://img-blog.csdnimg.cn/d3e32aff98894301b272bb46239cfe38.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_14,color_FFFFFF,t_70,g_se,x_16)
+
+这里是一个FileBeat镜像，主要是为了做日志采集工作
+
+![](https://img-blog.csdnimg.cn/a9a58a02cf564acf82ef16d1e5cb6606.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_18,color_FFFFFF,t_70,g_se,x_16)
+
+进入某个 Pod里面，进入
+
+```
+kubectl exec -it ds-test-cbk6v bash
+```
+
+通过该命令后，我们就能看到我们内部收集的日志信息了
+
+![](https://img-blog.csdnimg.cn/3fe6ea8184a941aa9268b5358efdc047.png)
+
+##  Job和CronJob
+
+一次性任务 和 定时任务
+
+- 一次性任务：一次性执行完就结束
+- 定时任务：周期性执行
+
+Job是K8S中用来控制批处理型任务的API对象。批处理业务与长期伺服业务的主要区别就是批处理业务的运行有头有尾，而长期伺服业务在用户不停止的情况下永远运行。Job管理的Pod根据用户的设置把任务成功完成就自动退出了。成功完成的标志根据不同的 spec.completions 策略而不同：单Pod型任务有一个Pod成功就标志完成；定数成功行任务保证有N个任务全部成功；工作队列性任务根据应用确定的全局成功而标志成功。
+
+### Job
+
+Job也即一次性任务
+
+![](https://img-blog.csdnimg.cn/cf982b154b9445d0bd72b3cb5deeeb47.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+使用下面命令，能够看到目前已经存在的Job
+
+```
+kubectl create -f job.yaml
+kubectl get jobs
+docker pull perl（在对应节点）
+```
+
+![](https://img-blog.csdnimg.cn/da494194924d4ce7a902a4f3ac9ba751.png)
+
+在计算完成后，通过命令查看，能够发现该任务已经完成
+
+![](https://img-blog.csdnimg.cn/4c2525d82e3d49dfb1b20865d3b5cf69.png)
+
+我们可以通过查看日志，查看到一次性任务的结果
+
+```
+kubectl logs pi-qpqff
+```
+
+![](https://img-blog.csdnimg.cn/5591a32f59144bd98f17a2d4991df915.png)
+
+然后将这个文件删掉
+
+```
+kubectl delete -f job.yaml
+kubectl get jobs  查看
+```
+
+###  CronJob
+
+定时任务，cronjob.yaml如下所示
+
+![](https://img-blog.csdnimg.cn/ebeba7e012c1430ca44feccee2cf48f6.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+这里面的命令就是每个一段时间，这里是通过 cron 表达式配置的，通过 schedule字段
+
+然后下面命令就是每个一段时间输出
+
+我们首先用上述的配置文件，创建一个定时任务
+
+```
+kubectl apply -f cronjob.yaml
+```
+
+创建完成后，我们就可以通过下面命令查看定时任务
+
+```
+kubectl get cronjobs
+```
+
+![](https://img-blog.csdnimg.cn/7883416d7e46439b889909f8aa9a249c.png)
+
+我们可以通过日志进行查看
+
+```
+kubectl logs hello-1599100140-wkn79
+```
+
+![](https://img-blog.csdnimg.cn/0894d890a21649edb55bcf8d82dc1979.png)
+
+然后每次执行，就会多出一个 pod
+
+![](https://img-blog.csdnimg.cn/b8e0fa6be13c423cbe027478735238d4.png)
+
+##  删除svc 和 statefulset
+
+使用下面命令，可以删除我们添加的svc 和 statefulset
+
+```
+kubectl delete svc web
+
+kubectl delete statefulset --all
+```
+
+#  Kubernetes配置管理
+
+## Secret
+
+Secret的主要作用就是加密数据，然后存在etcd里面，让Pod容器以挂载Volume方式进行访问
+
+场景：用户名 和 密码进行加密
+
+一般场景的是对某个字符串进行base64编码 进行加密
+
+```
+echo -n 'admin' | base64
+```
+
+![](https://img-blog.csdnimg.cn/7cd075a35bb04f08a0083d84db4923ea.png)
+
+### 变量形式挂载到Pod
+
+- 创建secret加密数据的yaml文件 secret.yaml
+
+![](https://img-blog.csdnimg.cn/74bf7a6ed6b24631bec89954ba6547db.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_12,color_FFFFFF,t_70,g_se,x_16)
+
+然后使用下面命令创建一个pod
+
+```
+kubectl create -f secret.yaml
+```
+
+通过get命令查看
+
+```
+kubectl get pods
+```
+
+实际上是叫mysecret
+
+![](https://img-blog.csdnimg.cn/9e0fe49fc43e435a8618abaff4558ac8.png)
+
+另一个yaml文件，里面对应了前面的mysecret
+
+![](https://img-blog.csdnimg.cn/4b192fd6b26f42a89f555b8c8381e71c.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_15,color_FFFFFF,t_70,g_se,x_16)
+
+![](https://img-blog.csdnimg.cn/d80dcbf6f8dc48dda7ac65540bb55c62.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_14,color_FFFFFF,t_70,g_se,x_16)
+
+创建 secret-val.yaml 文件，复制内容，注意不要少了字母
+
+```
+kubectl apply -f secret-val.yaml
+kubectl get pods
+```
+
+![](https://img-blog.csdnimg.cn/9e0fe49fc43e435a8618abaff4558ac8.png)
+
+然后我们通过下面的命令，进入到我们的容器内部
+
+```
+kubectl exec -it mypod bash
+```
+
+然后我们就可以输出我们的值，这就是以变量的形式挂载到我们的容器中
+
+```
+# 输出用户
+echo $SECRET_USERNAME
+# 输出密码
+echo $SECRET_PASSWORD
+```
+
+最后如果我们要删除这个Pod，就可以使用这个命令
+
+```
+kubectl delete -f secret-val.yaml
+kubectl delete secret --all
+```
+
+###  数据卷形式挂载
+
+首先我们创建一个 secret-val.yaml 文件
+
+![](https://img-blog.csdnimg.cn/0fb8da958e0d407aa28a8ebef7fa807b.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_16,color_FFFFFF,t_70,g_se,x_16)
+
+然后创建我们的 Pod
+
+```
+# 根据配置创建容器
+kubectl apply -f secret-val.yaml
+# 进入容器
+kubectl exec -it mypod bash
+# 查看
+ls /etc/foo
+```
+
+![](https://img-blog.csdnimg.cn/7396351ecf0848cbbc255cf87a2fab3e.png)
+
+![](https://img-blog.csdnimg.cn/e880044a12674047815e4aa611615d9d.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  ConfigMap
+
+ConfigMap作用是存储不加密的数据到etcd中，让Pod以变量或数据卷Volume挂载到容器中
+
+应用场景：配置文件
+
+### 创建配置文件
+
+首先我们需要创建一个配置文件 `redis.properties`
+
+```
+redis.port=127.0.0.1
+redis.port=6379
+redis.password=123456
+```
+
+### 创建ConfigMap
+
+我们使用命令创建configmap
+
+```
+kubectl create configmap redis-config --from-file=redis.properties
+```
+
+然后查看详细信息
+
+```
+kubectl get cm
+kubectl describe cm redis-config
+```
+
+![](https://img-blog.csdnimg.cn/8ff00ce2ec6442479cb5f84990acb668.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  Volume数据卷形式挂载
+
+首先我们需要创建一个 `cm.yaml`
+
+![](https://img-blog.csdnimg.cn/22406d706dc84f858c19634b55c1a4fe.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+然后使用该yaml创建我们的pod
+
+```
+# 创建
+kubectl apply -f cm.yaml
+# 查看
+kubectl get pods
+```
+
+![](https://img-blog.csdnimg.cn/39daa74e3c2b4e5fb9919fff7c8f0420.png)
+
+最后我们通过日志就可以查看结果输出了
+
+```
+kubectl logs mypod
+```
+
+![](https://img-blog.csdnimg.cn/790a572fa5c941bc94de066c20d549d4.png)
+
+###  以变量的形式挂载Pod
+
+首先我们也有一个 myconfig.yaml文件，声明变量信息，然后以configmap创建
+
+![](https://img-blog.csdnimg.cn/e8945dd0299a4080b13b443b4d547505.png)
+
+然后我们就可以创建我们的配置文件
+
+```
+# 创建pod
+kubectl apply -f myconfig.yaml
+# 获取
+kubectl get cm
+```
+
+![](https://img-blog.csdnimg.cn/b33260fcd84e4d94be4b6a9cac042599.png)
+
+然后我们创建完该pod后，我们就需要在创建一个 config-var.yaml 来使用我们的配置信息
+
+![](https://img-blog.csdnimg.cn/3e24e14c6d954db9908f3d48efd35545.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+```
+kubectl apply -f config-var.yaml
+kubectl get cm
+kubectl get pods
+```
+
+最后我们查看输出
+
+```
+kubectl logs mypod
+```
+
+![](https://img-blog.csdnimg.cn/145e7837610d4229b3948ebb8f1b94cd.png)
+
+#  Kubernetes集群安全机制
+
+## 概述
+
+当我们访问K8S集群时，需要经过三个步骤完成具体操作
+
+- 认证
+- 鉴权【授权】
+- 准入控制
+
+进行访问的时候，都需要经过 apiserver， apiserver做统一协调，比如门卫
+
+- 访问过程中，需要证书、token、或者用户名和密码
+- 如果访问pod需要serviceAccount
+
+![](https://img-blog.csdnimg.cn/dfedb05971a04936bc6975b42bfe0c60.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  认证
+
+对外不暴露8080端口，只能内部访问，对外使用的端口6443
+
+客户端身份认证常用方式
+
+- https证书认证，基于ca证书
+- http token认证，通过token来识别用户
+- http基本认证，用户名 + 密码认证
+
+### 鉴权
+
+基于RBAC进行鉴权操作
+
+基于角色访问控制
+
+### 准入控制
+
+就是准入控制器的列表，如果列表有请求内容就通过，没有的话 就拒绝
+
+## RBAC介绍
+
+基于角色的访问控制，为某个角色设置访问内容，然后用户分配该角色后，就拥有该角色的访问权限
+
+![](https://img-blog.csdnimg.cn/d7feef77da6e4f3db1f0b411245fee60.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+k8s中有默认的几个角色
+
+- role：特定命名空间访问权限
+- ClusterRole：所有命名空间的访问权限
+
+角色绑定
+
+- roleBinding：角色绑定到主体
+- ClusterRoleBinding：集群角色绑定到主体
+
+主体
+
+- user：用户
+- group：用户组
+- serviceAccount：服务账号
+
+## RBAC实现鉴权
+
+- 创建命名空间
+
+### 创建命名空间
+
+我们可以首先查看已经存在的命名空间
+
+```
+kubectl get namespace
+```
+
+![](https://img-blog.csdnimg.cn/010c630924034ec885430cd120ef734c.png)
+
+然后我们创建一个自己的命名空间 roledemo
+
+```
+kubectl create ns roledemo
+```
+
+### 命名空间创建Pod
+
+为什么要创建命名空间？因为如果不创建命名空间的话，默认是在default下
+
+```
+kubectl run nginx --image=nginx -n roledemo
+```
+
+### 创建角色
+
+我们通过 rbac-role.yaml进行创建,把这里面的namespace改为刚刚创建的roledemo
+
+![](https://img-blog.csdnimg.cn/8a6ccd1b6cf64008a72ad1e0f26ce19e.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+tip：这个角色只对pod 有 get、list，watch权限
+
+然后通过 yaml创建我们的role
+
+```
+# 创建
+kubectl apply -f rbac-role.yaml
+# 查看
+kubectl get role -n roledemo
+```
+
+![](https://img-blog.csdnimg.cn/27c4d1a69d734dedbdf003ca1374a6da.png)
+
+###  创建角色绑定
+
+我们还是通过 role-rolebinding.yaml 的方式，来创建我们的角色绑定
+
+namespace改为刚刚创建的roledemo
+
+![](https://img-blog.csdnimg.cn/ac5ec2911c42415db462e8c7120597e9.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+然后创建我们的角色绑定
+
+```
+# 创建角色绑定
+kubectl apply -f rbac-rolebinding.yaml
+# 查看角色绑定
+kubectl get role, rolebinding -n roledemo
+```
+
+![](https://img-blog.csdnimg.cn/f42967257d894f159ab3fcab5b588b6b.png)
+
+###  使用证书识别身份
+
+```
+创建目录
+mkdir mary
+```
+
+我们首先得有一个 rbac-user.sh 证书脚本
+
+这个脚本文件复制到mary目录下，vi查看
+
+![](https://img-blog.csdnimg.cn/3e43a89bf0f14b7d965f806a676d8bca.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_10,color_FFFFFF,t_70,g_se,x_16)
+
+![](https://img-blog.csdnimg.cn/95477a3293524f06b3cce9cf98aa76a3.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+这里面的 IP 需要更改为自己的 IP
+
+这里包含了很多证书文件，在TSL目录下，需要复制过来
+
+```
+cp /root/TLS/k8s/ca* ./   可能没有，因为没有用二进制搭建集群
+```
+
+![](https://img-blog.csdnimg.cn/721ec45f533f4d64a1aa9c0299c2a6ed.png)
+
+通过下面命令执行我们的脚本
+
+```
+base rbac-user.sh
+```
+
+最后我们进行测试
+
+```
+# 用get命令查看 pod 【有权限】
+kubectl get pods -n roledemo
+# 用get命令查看svc 【没权限】
+kubectl get svc -n roledmeo
+```
+
+![](https://img-blog.csdnimg.cn/2d00686efb3e4ea3bec81bc4e565f9b5.png)
+
+#  Kubernetes核心技术Ingress
+
+## 前言
+
+原来我们需要将端口号对外暴露，通过 ip + 端口号就可以进行访问
+
+原来是使用Service中的NodePort来实现
+
+- 在每个节点上都会启动端口
+- 在访问的时候通过任何节点，通过ip + 端口号就能实现访问
+
+但是NodePort还存在一些缺陷
+
+- 因为端口不能重复，所以每个端口只能使用一次，一个端口对应一个应用
+- 实际访问中都是用域名，根据不同域名跳转到不同端口服务中
+
+## Ingress和Pod关系
+
+pod 和 ingress 是通过service进行关联的，而ingress作为统一入口，由service关联一组pod中
+
+![](https://img-blog.csdnimg.cn/4acaf25211e540a484983affd06518d6.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+- 首先service就是关联我们的pod
+- 然后ingress作为入口，首先需要到service，然后发现一组pod
+- 发现pod后，就可以做负载均衡等操作
+
+## Ingress工作流程
+
+在实际的访问中，我们都是需要维护很多域名， a.com 和 b.com
+
+然后不同的域名对应的不同的Service，然后service管理不同的pod
+
+![](https://img-blog.csdnimg.cn/a89234a1f7794685aed0ce1f2bd315fd.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+需要注意，ingress不是内置的组件，需要我们单独的安装
+
+## 使用Ingress
+
+步骤如下所示
+
+- 部署ingress Controller【需要下载官方的】
+- 创建ingress规则【对哪个Pod、名称空间配置规则】
+
+### 创建Nginx Pod
+
+创建一个nginx应用，然后对外暴露端口
+
+```
+# 创建pod
+kubectl create deployment web --image=nginx
+# 查看
+kubectl get pods
+kubectl get deploy
+```
+
+对外暴露端口
+
+```
+kubectl expose deployment web --port=80 --target-port=80 --type:NodePort
+```
+
+### 部署 ingress controller
+
+下面我们来通过yaml的方式，部署我们的ingress，配置文件如下所示(不完整)
+
+![](https://img-blog.csdnimg.cn/24d445e442f9401db6a213b9bc140539.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+这个文件里面，需要注意的是 hostNetwork: true，改成ture是为了让后面访问到
+
+通过这种方式，其实我们在外面就能访问，这里还需要在外面添加一层
+
+```
+kubectl apply -f ingress-con.yaml
+```
+
+![](https://img-blog.csdnimg.cn/3cddfb7bf5314f83a5b721851c2b6939.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+最后通过下面命令，查看是否成功部署 ingress
+
+```
+kubectl get pods -n ingress-nginx
+```
+
+![](https://img-blog.csdnimg.cn/f5f57a6bfa714ed3b860c92a607ab743.png)
+
+### 创建ingress规则文件
+
+创建ingress规则文件，ingress-h.yaml
+
+```
+kubectl apply -f ingress-h.yaml
+```
+
+![](https://img-blog.csdnimg.cn/7c6f416585284db6a161333b0e2140e5.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+###  添加域名访问规则
+
+在windows 的 hosts文件，添加域名访问规则【因为我们没有域名解析，所以只能这样做】
+
+![](https://img-blog.csdnimg.cn/d866a2b15d6648758143bab030d105d9.png)
+
+最后通过域名就能访问
+
+```
+kubectl get ing
+```
+
+![](https://img-blog.csdnimg.cn/2539312c028a42bbb2c7d8e38527b2f6.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+#  Kubernetes核心技术Helm
+
+Helm就是一个包管理工具【类似于npm】
+
+![](https://img-blog.csdnimg.cn/02c663dc80da4ed5a9ac0130aae4ec18.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  为什么引入Helm
+
+首先在原来项目中都是基于yaml文件来进行部署发布的，而目前项目大部分微服务化或者模块化，会分成很多个组件来部署，每个组件可能对应一个deployment.yaml,一个service.yaml,一个Ingress.yaml还可能存在各种依赖关系，这样一个项目如果有5个组件，很可能就有15个不同的yaml文件，这些yaml分散存放，如果某天进行项目恢复的话，很难知道部署顺序，依赖关系等，而所有这些包括
+
+- 基于yaml配置的集中存放
+- 基于项目的打包
+- 组件间的依赖
+
+但是这种方式部署，会有什么问题呢？
+
+- 如果使用之前部署单一应用，少数服务的应用，比较合适
+- 但如果部署微服务项目，可能有几十个服务，每个服务都有一套yaml文件，需要维护大量的yaml文件，版本管理特别不方便
+
+Helm的引入，就是为了解决这个问题
+
+- 使用Helm可以把这些YAML文件作为整体管理
+- 实现YAML文件高效复用
+- 使用helm应用级别的版本管理
+
+## Helm介绍
+
+Helm是一个Kubernetes的包管理工具，就像Linux下的包管理器，如yum/apt等，可以很方便的将之前打包好的yaml文件部署到kubernetes上。
+
+Helm有三个重要概念
+
+- helm：一个命令行客户端工具，主要用于Kubernetes应用chart的创建、打包、发布和管理
+- Chart：应用描述，一系列用于描述k8s资源相关文件的集合
+- Release：基于Chart的部署实体，一个chart被Helm运行后将会生成对应的release，将在K8S中创建出真实的运行资源对象。也就是应用级别的版本管理
+- Repository：用于发布和存储Chart的仓库
+
+## Helm组件及架构
+
+Helm采用客户端/服务端架构，有如下组件组成
+
+- Helm CLI是Helm客户端，可以在本地执行
+- Tiller是服务器端组件，在Kubernetes集群上运行，并管理Kubernetes应用程序
+- Repository是Chart仓库，Helm客户端通过HTTP协议来访问仓库中Chart索引文件和压缩包
+
+![](https://img-blog.csdnimg.cn/dde55480e88741eea3accc8a1ea9f165.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  Helm v3变化
+
+2019年11月13日，Helm团队发布了Helm v3的第一个稳定版本
+
+该版本主要变化如下
+
+- 架构变化
+  - 最明显的变化是Tiller的删除
+  - V3版本删除Tiller
+  - relesase可以在不同命名空间重用
+
+V3之前
+
+![](https://img-blog.csdnimg.cn/af02b51cfbc64463a5eb7cc263c9c0af.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+V3版本
+
+![](https://img-blog.csdnimg.cn/1390d2c3f6f34cd89e8fd438594eeebe.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+##  helm配置
+
+首先我们需要去 [官网下载](https://gitee.com/link?target=https%3A%2F%2Fhelm.sh%2Fdocs%2Fintro%2Fquickstart%2F)
+
+- 第一步，[下载helm](https://gitee.com/link?target=https%3A%2F%2Fgithub.com%2Fhelm%2Fhelm%2Freleases)安装压缩文件，上传到linux系统中
+- 第二步，解压helm压缩文件，把解压后的helm目录复制到 usr/bin 目录中
+- 使用命令：helm
+
+我们都知道yum需要配置yum源，那么helm就就要配置helm源
+
+## helm仓库
+
+添加仓库
+
+```
+helm repo add 仓库名  仓库地址 
+```
+
+例如
+
+```
+# 配置微软源
+helm repo add stable http://mirror.azure.cn/kubernetes/charts
+# 配置阿里源
+helm repo add aliyun https://kubernetes.oss-cn-hangzhou.aliyuncs.com/charts
+# 配置google源
+helm repo add google https://kubernetes-charts.storage.googleapis.com/
+
+# 更新
+helm repo update
+```
+
+然后可以查看我们添加的仓库地址
+
+```
+# 查看全部
+helm repo list
+# 查看某个
+helm search repo stable
+```
+
+![](https://img-blog.csdnimg.cn/5b47a0abfdaf4f9398e96c30ee8bb86a.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_20,color_FFFFFF,t_70,g_se,x_16)
+
+或者可以删除我们添加的源
+
+```
+helm repo remove stable
+```
+
+## helm基本命令
+
+- chart install
+- chart upgrade
+- chart rollback
+
+## 使用helm快速部署应用
+
+### 使用命令搜索应用
+
+首先我们使用命令，搜索我们需要安装的应用
+
+```
+# 搜索 weave仓库
+helm search repo weave
+```
+
+![](https://img-blog.csdnimg.cn/5fe890b62e214727991d9cc7a62a23eb.png)
+
+###  根据搜索内容选择安装
+
+搜索完成后，使用命令进行安装
+
+```
+helm install ui aliyun/weave-scope
+```
+
+可以通过下面命令，来下载yaml文件【如果】
+
+```
+kubectl apply -f weave-scope.yaml
+```
+
+安装完成后，通过下面命令即可查看
+
+```
+helm list
+```
+
+![](https://img-blog.csdnimg.cn/298d71c7572744c8a71f55fd7dcc4e1c.png)
+
+同时可以通过下面命令，查看更新具体的信息
+
+```
+helm status ui
+```
+
+但是我们通过查看 svc状态，发现没有对象暴露端口
+
+![](https://img-blog.csdnimg.cn/1837c3a6f9a449bb9d2763f62119b3f3.png)
+
+所以我们需要修改service的yaml文件，添加NodePort
+
+```
+kubectl edit svc ui-weave-scope
+```
+
+![](https://img-blog.csdnimg.cn/f540eea17bb84185b0c07d7680cd0713.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_16,color_FFFFFF,t_70,g_se,x_16)
+
+这样就可以对外暴露端口了
+
+![](https://img-blog.csdnimg.cn/641d9f74eddf43269d8fec3e252699bb.png)
+
+然后我们通过 ip + 32185 即可访问
+
+### 如果自己创建Chart
+
+使用命令，自己创建Chart
+
+```
+helm create mychart
+```
+
+创建完成后，我们就能看到在当前文件夹下，创建了一个 mychart目录
+
+![](https://img-blog.csdnimg.cn/c0348c1d65fe4be2b613847608358781.png)
+
+####  目录格式
+
+- templates：编写yaml文件存放到这个目录
+- values.yaml：存放的是全局的yaml文件
+- chart.yaml：当前chart属性配置信息
+
+### 在templates文件夹创建两个文件
+
+我们创建以下两个
+
+- deployment.yaml
+- service.yaml
+
+我们可以通过下面命令创建出yaml文件
+
+```
+# 导出deployment.yaml
+kubectl create deployment web1 --image=nginx --dry-run -o yaml > deployment.yaml
+# 导出service.yaml 【可能需要创建 deployment，不然会报错】
+kubectl expose deployment web1 --port=80 --target-port=80 --type=NodePort --dry-run -o yaml > service.yaml
+```
+
+### 安装mychart
+
+执行命令创建
+
+```
+helm install web1 mychart
+```
+
+![](https://img-blog.csdnimg.cn/d7004c3bf44747c8a504a95238504bb1.png)
+
+###  应用升级
+
+当我们修改了mychart中的东西后，就可以进行升级操作
+
+```
+helm upgrade web1 mychart
+```
+
+## chart模板使用
+
+通过传递参数，动态渲染模板，yaml内容动态从传入参数生成
+
+![](https://img-blog.csdnimg.cn/b8a5a9e31eec436598fe2b5037ca5065.png)
+
+刚刚我们创建mychart的时候，看到有values.yaml文件，这个文件就是一些全局的变量，然后在templates中能取到变量的值，下面我们可以利用这个，来完成动态模板
+
+- 在values.yaml定义变量和值
+- 具体yaml文件，获取定义变量值
+- yaml文件中大题有几个地方不同
+  - image
+  - tag
+  - label
+  - port
+  - replicas
+
+### 定义变量和值
+
+在values.yaml定义变量和值
+
+![](https://img-blog.csdnimg.cn/f8b85bc4e6c3458a92d6289cb3ff89b9.png)
+
+###  获取变量和值
+
+我们通过表达式形式 使用全局变量 `{{.Values.变量名称}}`
+
+例如： `{{.Release.Name}}`
+
+![](https://img-blog.csdnimg.cn/3fb1bde2585b4f56a53779fd877b6647.png?x-oss-process=image/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBAU3Vja2VyX-iLjw==,size_14,color_FFFFFF,t_70,g_se,x_16)
+
+###  安装应用
+
+在我们修改完上述的信息后，就可以尝试的创建应用了
+
+```
+helm install --dry-run web2 mychart
+```
+
+![](https://img-blog.csdnimg.cn/953b3b3c27344f1caf53c6a6231e2dc1.png)
+
