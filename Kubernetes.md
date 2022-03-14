@@ -3767,20 +3767,20 @@ systemctl disable firewalld
 
 # 关闭selinux
 # 永久关闭
-sed -i 's/enforcing/disabled/' /etc/selinux/config  
+sed -i 's/enforcing/disabled/' /etc/selinux/config
 # 临时关闭
 setenforce 0  
 
 # 关闭swap
 # 临时
-swapoff -a 
+swapoff -a
 # 永久关闭
 sed -ri 's/.*swap.*/#&/' /etc/fstab
 
 # 根据规划设置主机名【master1节点上操作】
 hostnamectl set-hostname master1
 # 根据规划设置主机名【master2节点上操作】
-hostnamectl set-hostname master1
+hostnamectl set-hostname master2
 # 根据规划设置主机名【node1节点操作】
 hostnamectl set-hostname node1
 
@@ -3942,7 +3942,7 @@ systemctl status haproxy
 启动后，我们查看对应的端口是否包含 16443
 
 ```
-netstat -lntup | grep haproxy
+netstat -lntup|grep haproxy
 此处可能需要
 yum install net-tools
 ```
@@ -4016,7 +4016,7 @@ frontend kubernetes-apiserver
 backend kubernetes-apiserver
     mode        tcp
     balance     roundrobin
-    server      master01.k8s.io   192.168.208.155:6443 check
+    server      master03.k8s.io   192.168.208.155:6443 check
     server      master02.k8s.io   192.168.208.156:6443 check
 #---------------------------------------------------------------------
 # collection haproxy statistics message
@@ -4044,7 +4044,7 @@ yum install wget
 
 ```
 wget https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo -O /etc/yum.repos.d/docker-ce.repo
-yum -y install docker-ce
+yum -y install docker-ce-19.03.0
 systemctl enable docker && systemctl start docker
 docker --version
 systemctl status docker
@@ -4069,9 +4069,11 @@ EOF
 mkdir -p /etc/docker
 tee /etc/docker/daemon.json <<-'EOF'
 {
+  "exec-opts": ["native.cgroupdriver=systemd"],
   "registry-mirrors": ["https://m5m8ek6r.mirror.aliyuncs.com"]
 }
 EOF
+
 systemctl daemon-reload
 ```
 
@@ -4085,9 +4087,9 @@ systemctl restart docker
 
 由于版本更新频繁，这里指定版本号部署：
 
-```
+```bash
 # 安装kubelet、kubeadm、kubectl，同时指定版本，先进行下面的yum 的k8s 软件源
-yum install -y kubelet-1.18.0 kubeadm-1.18.0 kubectl-1.18.0
+yum install -y kubelet-1.19.4 kubeadm-1.19.4 kubectl-1.19.4
 # 设置开机启动
 systemctl enable kubelet
 ```
@@ -4121,16 +4123,40 @@ ip a s ens33
 
 ```
 # 创建文件夹
-mkdir /usr/local/kubernetes/mainfests -p
+mkdir /usr/local/kubernetes/manifests -p
 # 到manifests目录
-cd /usr/local/kubernetes/mainfests/
+cd /usr/local/kubernetes/manifests/
 # 新建yaml文件
 vi kubeadm-config.yaml
+
+cat >> alik8simages.sh << EOF
+#!/bin/bash
+list='kube-apiserver:v1.19.4
+kube-controller-manager:v1.19.4
+kube-scheduler:v1.19.4
+kube-proxy:v1.19.4
+pause:3.2
+etcd:3.4.13-0
+coredns:1.7.0'
+for item in \$list
+  do
+
+    docker pull registry.aliyuncs.com/google_containers/\$item && docker tag registry.aliyuncs.com/google_containers/\$item k8s.gcr.io/\$item && docker rmi registry.aliyuncs.com/google_containers/\$item
+
+  done
+EOF
+
+kubeadm init \
+--control-plane-endpoint 192.168.208.158:6443 \
+--kubernetes-version=v1.19.4 \
+--service-cidr=10.96.0.0/12 \
+--pod-network-cidr=10.244.0.0/16 \
+--upload-certs
 ```
 
 yaml内容如下所示：注意ip地址和版本和名称
 
-```
+```yaml
 apiServer:
   certSANs:
     - master1
@@ -4146,7 +4172,7 @@ apiServer:
 apiVersion: kubeadm.k8s.io/v1beta1
 certificatesDir: /etc/kubernetes/pki
 clusterName: kubernetes
-controlPlaneEndpoint: "master.k8s.io:16443"
+controlPlaneEndpoint: "master.k8s.io:6443"
 controllerManager: {}
 dns: 
   type: CoreDNS
@@ -4155,7 +4181,7 @@ etcd:
     dataDir: /var/lib/etcd
 imageRepository: registry.aliyuncs.com/google_containers
 kind: ClusterConfiguration
-kubernetesVersion: v1.18.0
+kubernetesVersion: v1.19.4
 networking: 
   dnsDomain: cluster.local  
   podSubnet: 10.244.0.0/16

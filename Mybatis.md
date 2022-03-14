@@ -1884,14 +1884,14 @@ public void queryBlogIF(){
 
 如果没有匹配的条件会怎么样？最终这条 SQL 会变成这样：
 
-```
+```sql
 SELECT * FROM BLOG
 WHERE
 ```
 
 这会导致查询失败。如果匹配的只是第二个条件又会怎样？这条 SQL 会是这样:
 
-```
+```sql
 SELECT * FROM BLOG
 WHERE
 AND title like ‘someTitle’
@@ -1955,7 +1955,7 @@ select * from mybatis.blog
 
 如果 *where* 元素与你期望的不太一样，你也可以通过自定义 trim 元素来定制 *where* 元素的功能。比如，和 *where* 元素等价的自定义 trim 元素为：
 
-```
+```sql
 <trim prefix="WHERE" prefixOverrides="AND |OR ">
   ...
 </trim>
@@ -1965,7 +1965,7 @@ select * from mybatis.blog
 
 用于动态更新语句的类似解决方案叫做 *set*。*set* 元素可以用于动态包含需要更新的列，忽略其它不更新的列。比如：
 
-```
+```sql
 <update id="updateAuthorIfNecessary">
   update Author
     <set>
@@ -1982,7 +1982,7 @@ select * from mybatis.blog
 
 来看看与 *set* 元素等价的自定义 *trim* 元素吧：
 
-```
+```sql
 <trim prefix="SET" suffixOverrides=",">
   ...
 </trim>
