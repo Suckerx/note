@@ -2483,6 +2483,7 @@ import javax.annotation.PostConstruct;
  *
  * @Description shiro自定义realm
  */
+//只做定义，不做具体实现，所以用abstract
 public abstract class ShiroDbRealm extends AuthorizingRealm {
 	
 	/**
@@ -2500,7 +2501,7 @@ public abstract class ShiroDbRealm extends AuthorizingRealm {
 	public abstract AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals);
 	
 	/**
-	 * @Description 密码匹配器
+	 * @Description 自定义密码匹配器
 	 */
 	@PostConstruct
 	public abstract void initCredentialsMatcher() ;
@@ -2550,15 +2551,19 @@ public class ShiroDbRealmImpl extends ShiroDbRealm {
      */
     @Override
     public AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authcToken) {
+        //token令牌信息
         SimpleToken token = (SimpleToken)authcToken;
+        //查询user对象，创建bridge包，创建UserBridgeService接口，桥接用户信息
         User user  = userBridgeService.findUserByLoginName(token.getUsername());
         if(EmptyUtil.isNullOrEmpty(user)){
             throw new UnknownAccountException("账号不存在");
         }
+        //转换方法，将user对象转换为ShiroUser，只要属性一直即可赋值，类似BeanUtils那个
         ShiroUser shiroUser = BeanConv.toBean(user, ShiroUser.class);
         shiroUser.setResourceIds(userBridgeService.findResourcesIdsList(user.getId()));
         String salt = user.getSalt();
         String password = user.getPassWord();
+        //参数：令牌对象，密文密码，加密因子，当前realm的名称
         return new SimpleAuthenticationInfo(shiroUser, password, ByteSource.Util.bytes(salt), getName());
     }
 
@@ -3146,22 +3151,22 @@ public class ShiroConfig {
     @Bean(name="sessionManager")
     public DefaultWebSessionManager shiroSessionManager(){
         DefaultWebSessionManager sessionManager = new DefaultWebSessionManager();
-        sessionManager.setSessionValidationSchedulerEnabled(false);
-        sessionManager.setSessionIdCookieEnabled(true);
-        sessionManager.setSessionIdCookie(simpleCookie());
-        sessionManager.setGlobalSessionTimeout(3600000);
+        sessionManager.setSessionValidationSchedulerEnabled(false);//会话刷新关闭，默认是开启的，因为没有配置这个，所以直接关闭
+        sessionManager.setSessionIdCookieEnabled(true);//开启cookie
+        sessionManager.setSessionIdCookie(simpleCookie());//指定由上面的simpleCookie创建
+        sessionManager.setGlobalSessionTimeout(3600000);//超时结束
         return sessionManager;
     }
 
     /**
-     * @Description 保证实现了Shiro内部lifecycle函数的bean执行
+     * @Description 保证实现了Shiro内部lifecycle函数的bean执行，用static先加载
      */
     @Bean(name = "lifecycleBeanPostProcessor")
     public static LifecycleBeanPostProcessor getLifecycleBeanPostProcessor() {
         return new LifecycleBeanPostProcessor();
     }
 
-    /**
+    /** AOP增强（使用注解鉴权方式）
      * @Description AOP式方法级权限检查
      */
     @Bean
@@ -3225,6 +3230,8 @@ Shiro内置了很多默认的过滤器，比如身份验证、授权等相关的
 #### 【2】过滤器链
 
 定义：authentication.properties
+
+路径+过滤器形成过滤器链
 
 ```properties
 #静态资源不过滤
@@ -3451,7 +3458,7 @@ public class LinkProperties extends Properties{
 
 ![1581071730065](image\1581071730065.png)
 
-分析：改源码表示，例如：/admin/order= roles["admin, root"] ，只有当放问该接口同时具备admin和root两种角色时，才可以被访问。
+分析：改源码表示，例如：/admin/order= roles["admin, root"] ，只有当访问该接口同时具备admin和root两种角色时，才可以被访问。
 
 #### 【5】自定义过滤器使用
 
@@ -3513,9 +3520,11 @@ public class RolesOrAuthorizationFilter extends AuthorizationFilter {
 
 在ShiroConfig类中添加如下内容
 
+shiroFilter.setFilters这个方法使用自定义过滤器
+
 ```java
 /**
-     * @Description 自定义过滤器定义
+     * @Description 加载自定义过滤器
      */
     private Map<String, Filter> filters() {
         Map<String, Filter> map = new HashMap<String, Filter>();
@@ -3546,8 +3555,8 @@ public class RolesOrAuthorizationFilter extends AuthorizationFilter {
 /static/**=anon
 #登录链接不过滤
 /login/**=anon
-#访问/resource/**需要有admin的角色
-/resource/**=role-or[admin]
+#访问/resource/**需要有以下两个的角色，但是用了自定义过滤器role-or，里面定义是
+/resource/**=role-or[SuperAdmin,dev]
 #其他链接是需要登录的
 /**=authc
 ```
