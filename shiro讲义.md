@@ -1493,7 +1493,7 @@ securityManager.realms=$definitionRealm
 logout.redirectUrl=/login.jsp
 #若没有登录，则被authc过滤器重定向到login.jsp页面
 authc.loginUrl = /login.jsp
-[urls]
+[urls] #有序的
 /login=anon
 #发送/home请求需要先登录
 /home= authc
@@ -1524,8 +1524,8 @@ public interface LoginService {
 
     /**
      * @Description 登录方法
-     * @param token 登录对象
-     * @return
+     * @param token 账户凭证信息
+     * @return  是否登录成功
      */
     boolean login(UsernamePasswordToken token);
 
