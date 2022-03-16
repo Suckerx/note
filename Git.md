@@ -146,8 +146,16 @@ Git 的默认编辑器，建议使用默认的 Vim 编辑器，然后点击下�
 基本语法
 
 - `git config --global user.name` 用户名
+
 - `git config --global user.email` 邮箱
+
 - 注意这里要设置和github一样的用户名和邮箱否则没有小绿点
+
+- ```
+  git filter-branch --commit-filter "GIT_AUTHOR_NAME='S'; GIT_AUTHOR_EMAIL='1903629378@qq.com'"
+  ```
+
+- 
 
 查看
 
