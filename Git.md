@@ -146,27 +146,12 @@ Git 的默认编辑器，建议使用默认的 Vim 编辑器，然后点击下�
 基本语法
 
 - `git config --global user.name` 用户名
-<<<<<<< HEAD
 
 - `git config --global user.email` 邮箱
 
 - 注意这里要设置和github一样的用户名和邮箱否则没有小绿点
 
-- ```
-  git filter-branch --commit-filter "GIT_AUTHOR_NAME='S'; GIT_AUTHOR_EMAIL='1903629378@qq.com'"
-  ```
-
-- 
-
-=======
-- `git config --global user.email` 邮箱
-- 注意这里要设置和github一样的用户名和邮箱否则没有小绿点
-
->>>>>>> 22d595c (2022-03-18)
-查看
-
-- git config --global user.name
-- git config --global user.email
+  
 
 在C:\Users\扶苏目录下下有个 `.gitconfig` 文件，打开里面就是我们设置的用户签名
 
