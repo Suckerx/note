@@ -5165,6 +5165,7 @@ public class KickedOutAuthorizationFilter extends AccessControlFilter {
                 log.info("session已经过期");
             }
             if (!EmptyUtil.isNullOrEmpty(session)){
+                //删除session会话
                 redisSessionDao.delete(session);
             }
         }
@@ -5333,6 +5334,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+//自定义jwtwoken管理者
 @Service("jwtTokenManager")
 @EnableConfigurationProperties({JwtProperties.class})
 public class JwtTokenManager {
@@ -5376,9 +5378,9 @@ public class JwtTokenManager {
         if (ttlMillis >= 0) {
             long expMillis = nowMillis + ttlMillis;
             Date exp = new Date(expMillis);//4. 过期时间，这个也是使用毫秒生成的，使用当前时间+前面传入的持续时间生成
-            builder.setExpiration(exp);
+            builder.setExpiration(exp);//指定过期时间
         }
-        return builder.compact();
+        return builder.compact();//生成JWT加密令牌
     }
 
     /**
@@ -5421,7 +5423,7 @@ public class JwtTokenManager {
 
 ### 4、重写DefaultWebSessionManager
 
-ShiroSessionManager主要是添加jwtToken的jti作为会话的唯一标识
+ShiroSessionManager主要是添加jwtToken的 jti 作为会话的唯一标识
 
 ```java
 package com.itheima.shiro.core.impl;
@@ -5438,13 +5440,14 @@ import javax.servlet.ServletResponse;
 import java.io.Serializable;
 
 /**
- * @Description 重写Jwt会话管理
+ * @Description 重写Jwt会话管理，使之能够同时支持cookie和JWT
  */
 
 public class ShiroSessionManager extends DefaultWebSessionManager {
-	
+	//从请求中获得sessionId的key
 	private static final String AUTHORIZATION = "jwtToken";
 
+    //自定义注入的资源名称
     private static final String REFERENCED_SESSION_ID_SOURCE = "Stateless request";
 
     public ShiroSessionManager(){
@@ -5454,8 +5457,10 @@ public class ShiroSessionManager extends DefaultWebSessionManager {
     @Autowired
     JwtTokenManager jwtTokenManager;
 
+    //重写的关键方法
     @Override
     protected Serializable getSessionId(ServletRequest request, ServletResponse response){
+        //判断request请求中是否有jwtToken的key
         String jwtToken = WebUtils.toHttp(request).getHeader(AUTHORIZATION);
         if(EmptyUtil.isNullOrEmpty(jwtToken)){
             //如果没有携带id参数则按照父类的方式在cookie进行获取
@@ -5517,7 +5522,7 @@ public class BaseResponse extends ToString {
 
 #### 【1】JwtAuthcFilter
 
-使用wtTokenManager.isVerifyToken(jwtToken)校验颁发jwtToken是否合法，同时在拒绝的时候返回对应的json数据格式
+使用jwtTokenManager.isVerifyToken(jwtToken)校验颁发jwtToken是否合法，同时在拒绝的时候返回对应的json数据格式
 
 ```java
 package com.itheima.shiro.core.filter;
@@ -5572,7 +5577,7 @@ public class JwtAuthcFilter extends FormAuthenticationFilter {
     protected boolean onAccessDenied(ServletRequest request, ServletResponse response) throws Exception {
         //判断当前请求头中是否带有jwtToken的字符串
         String jwtToken = WebUtils.toHttp(request).getHeader("jwtToken");
-        //如果有：返回json的应答
+        //如果有：返回json的应答，这里可能代表的意义是，jwtToken有值，但是在上一步isAccessAllowed方法没有校验成功
         if (!EmptyUtil.isNullOrEmpty(jwtToken)){
             BaseResponse baseResponse = new BaseResponse(ShiroConstant.NO_LOGIN_CODE,ShiroConstant.NO_LOGIN_MESSAGE);
             response.setCharacterEncoding("UTF-8");
@@ -5588,6 +5593,8 @@ public class JwtAuthcFilter extends FormAuthenticationFilter {
 ```
 
 #### 【2】JwtPermsFilter
+
+资源校验
 
 ```java
 package com.itheima.shiro.core.filter;
@@ -5605,7 +5612,7 @@ import java.io.IOException;
 
 /**
  * @Description：自定义jwt的资源校验
- */
+ */ //先继承原始校验方式
 public class JwtPermsFilter extends PermissionsAuthorizationFilter {
 
     /**
@@ -5615,7 +5622,7 @@ public class JwtPermsFilter extends PermissionsAuthorizationFilter {
     protected boolean onAccessDenied(ServletRequest request, ServletResponse response) throws IOException {
         //判断当前请求头中是否带有jwtToken的字符串
         String jwtToken = WebUtils.toHttp(request).getHeader("jwtToken");
-        //如果有：返回json的应答
+        //如果有：返回json的应答，这里可能代表的意义是，jwtToken有值，但是在上一步isAccessAllowed方法没有校验成功
         if (!EmptyUtil.isNullOrEmpty(jwtToken)){
             BaseResponse baseResponse = new BaseResponse(ShiroConstant.NO_AUTH_CODE,ShiroConstant.NO_AUTH_MESSAGE);
             response.setCharacterEncoding("UTF-8");
@@ -5658,7 +5665,7 @@ public class JwtRolesFilter extends RolesAuthorizationFilter {
     protected boolean onAccessDenied(ServletRequest request, ServletResponse response) throws IOException {
         //判断当前请求头中是否带有jwtToken的字符串
         String jwtToken = WebUtils.toHttp(request).getHeader("jwtToken");
-        //如果有：返回json的应答
+        //如果有：返回json的应答，这里可能代表的意义是，jwtToken有值，但是在上一步isAccessAllowed方法没有校验成功
         if (!EmptyUtil.isNullOrEmpty(jwtToken)){
             BaseResponse baseResponse = new BaseResponse(ShiroConstant.NO_ROLE_CODE,ShiroConstant.NO_ROLE_MESSAGE);
             response.setCharacterEncoding("UTF-8");
@@ -5679,7 +5686,7 @@ public class JwtRolesFilter extends RolesAuthorizationFilter {
 
 1、ShiroSessionManager替换DefaultWebSessionManager
 
-2、生效过滤器
+2、生效过滤器，在自定义过滤器定义方法中添加自定义的拦截器
 
 ```java
 package com.itheima.shiro.config;
@@ -6030,10 +6037,11 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     public BaseResponse routeForJwt(LoginVo loginVo) throws UnknownAccountException, IncorrectCredentialsException {
-        Map<String, String> map = new HashMap<>();
         String jwtToken = null;
+        SimpleToken simpleToken = null;
         try {
-            SimpleToken token = new SimpleToken(null, loginVo.getLoginName(), loginVo.getPassWord());
+            //登录操作
+            simpleToken = new SimpleToken(null, loginVo.getLoginName(), loginVo.getPassWord());
             Subject subject = SecurityUtils.getSubject();
             subject.login(token);
             String shiroSessionId = ShiroUserUtil.getShiroSessionId();
@@ -6042,10 +6050,9 @@ public class LoginServiceImpl implements LoginService {
             Map<String, Object> claims = new HashMap<>();
             claims.put("shiroUser", JSONObject.toJSONString(shiroUser));
             jwtToken = jwtTokenManager.IssuedToken("system", subject.getSession().getTimeout(),shiroSessionId,claims);
-            map.put("jwtToken",jwtToken );
-            log.info("jwtToken:{}",map.toString());
+            log.info("jwtToken:{}",j.toString());
             //创建缓存
-            this.loadAuthorityToCache();
+            this.loadAuthorityToCache(jwtToken);
         } catch (Exception ex) {
             BaseResponse baseResponse = new BaseResponse(ShiroConstant.LOGIN_FAILURE_CODE, ShiroConstant.LOGIN_FAILURE_MESSAGE);
             return baseResponse;
