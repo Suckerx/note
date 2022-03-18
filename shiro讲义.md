@@ -3727,17 +3727,30 @@ public class ShiroConfig {
     /**
      * @Description redission客户端
      */
+<<<<<<< HEAD
     @Bean("redissonClientForShiro")
     public RedissonClient redissonClient() {
         log.info("=====初始化redissonClientForShiro开始======");
         String[] nodeList = shiroRedisProperties.getNodes().split(",");
+=======
+    @Bean("redissonClientForShiro")//这里指定名称，以便让认证鉴权和业务的redis分开
+    public RedissonClient redissonClient() {
+        log.info("=====初始化redissonClientForShiro开始======");
+        //获取当前Redis节点信息
+        String[] nodeList = shiroRedisProperties.getNodes().split(",");
+        //创建配置信息：1.单机redis配置  2.集群redis配置
+>>>>>>> 22d595c (2022-03-18)
         Config config = new Config();
         if (nodeList.length == 1) {
             config.useSingleServer().setAddress(nodeList[0])
                     .setConnectTimeout(shiroRedisProperties.getConnectTimeout())
                     .setConnectionMinimumIdleSize(shiroRedisProperties.getConnectionMinimumidleSize())
                     .setConnectionPoolSize(shiroRedisProperties.getConnectPoolSize()).setTimeout(shiroRedisProperties.getTimeout());
+<<<<<<< HEAD
         } else {
+=======
+        } else {//集群
+>>>>>>> 22d595c (2022-03-18)
             config.useClusterServers().addNodeAddress(nodeList)
                     .setConnectTimeout(shiroRedisProperties.getConnectTimeout())
                     .setMasterConnectionMinimumIdleSize(shiroRedisProperties.getConnectionMinimumidleSize())
@@ -3963,11 +3976,19 @@ import org.apache.shiro.codec.Base64;
 import java.io.*;
 
 /**
+<<<<<<< HEAD
  * @Description：实现shiro会话的序列化存储
  */
 @Log4j2
 public class ShiroRedissionSerialize {
 
+=======
+ * @Description：实现shiro会话的序列化存储，自定义序列化工具
+ */
+@Log4j2
+public class ShiroRedissionSerialize {
+	//反序列化
+>>>>>>> 22d595c (2022-03-18)
     public static Object deserialize(String str) {
         if (EmptyUtil.isNullOrEmpty(str)) {
             return null;
@@ -3992,6 +4013,10 @@ public class ShiroRedissionSerialize {
         return object;
     }
 
+<<<<<<< HEAD
+=======
+    //序列化
+>>>>>>> 22d595c (2022-03-18)
     public static String serialize(Object obj) {
 
         if (EmptyUtil.isNullOrEmpty(obj)) {
@@ -4004,6 +4029,10 @@ public class ShiroRedissionSerialize {
             bos = new ByteArrayOutputStream();
             oos = new ObjectOutputStream(bos);
             oos.writeObject(obj);
+<<<<<<< HEAD
+=======
+            //转换字符串
+>>>>>>> 22d595c (2022-03-18)
             base64String = EncodesUtil.encodeBase64(bos.toByteArray());
         } catch (IOException e) {
             log.error("流写入异常：{}",e);
@@ -4033,7 +4062,11 @@ import org.apache.shiro.cache.Cache;
 import org.apache.shiro.cache.CacheException;
 
 /**
+<<<<<<< HEAD
  * @Description 简单的缓存管理接口
+=======
+ * @Description 简单的缓存管理服务接口
+>>>>>>> 22d595c (2022-03-18)
  */
 public interface SimpleCacheService {
 
@@ -4529,6 +4562,10 @@ public class RedisSessionDao extends AbstractSessionDAO {
 
 	@Override
 	protected Serializable doCreate(Session session) {
+<<<<<<< HEAD
+=======
+        //创建唯一标识的sessionId
+>>>>>>> 22d595c (2022-03-18)
 		Serializable sessionId = generateSessionId(session);
 		assignSessionId(session, sessionId);
 //		log.info("=============创建sessionId:{}",sessionId);
@@ -4852,7 +4889,12 @@ import java.util.concurrent.TimeUnit;
 public class RetryLimitCredentialsMatcher extends HashedCredentialsMatcher {
 
     private RedissonClient redissonClient;
+<<<<<<< HEAD
 
+=======
+	
+    //比较次数，因为从0开始，所以是4
+>>>>>>> 22d595c (2022-03-18)
     private static Long RETRY_LIMIT_NUM = 4L;
 
     /**
@@ -4860,6 +4902,10 @@ public class RetryLimitCredentialsMatcher extends HashedCredentialsMatcher {
      * @param hashAlgorithmName 匹配次数
      * @return
      */
+<<<<<<< HEAD
+=======
+    //因为不交给Spring管理，所以使用构造函数使其可以new出来
+>>>>>>> 22d595c (2022-03-18)
     public RetryLimitCredentialsMatcher(String hashAlgorithmName,RedissonClient redissonClient) {
         super(hashAlgorithmName);
         this.redissonClient = redissonClient;
@@ -4867,10 +4913,18 @@ public class RetryLimitCredentialsMatcher extends HashedCredentialsMatcher {
 
     @Override
     public boolean doCredentialsMatch(AuthenticationToken token, AuthenticationInfo info) {
+<<<<<<< HEAD
         //获得登录吗
         String loginName = (String) token.getPrincipal();
         //获得缓存
         RAtomicLong atomicLong = redissonClient.getAtomicLong(loginName);
+=======
+        //获得登录名
+        String loginName = (String) token.getPrincipal();
+        //获得系统中是否已经有登录次数的缓存，缓存对象结构预期为：用户名-登录次数
+        RAtomicLong atomicLong = redissonClient.getAtomicLong(loginName);
+        //如果之前没有登录缓存，则创建一个登录次数缓存
+>>>>>>> 22d595c (2022-03-18)
         long retryFlag = atomicLong.get();
         //判断次数
         if (retryFlag>RETRY_LIMIT_NUM){
@@ -4878,7 +4932,11 @@ public class RetryLimitCredentialsMatcher extends HashedCredentialsMatcher {
             atomicLong.expire(10, TimeUnit.MICROSECONDS);
             throw new ExcessiveAttemptsException("密码错误5次，请10分钟以后再试");
         }
+<<<<<<< HEAD
         //累加次数
+=======
+        //累加次数，设置指定时间内有效
+>>>>>>> 22d595c (2022-03-18)
         atomicLong.incrementAndGet();
         atomicLong.expire(10, TimeUnit.MICROSECONDS);
         //密码校验
