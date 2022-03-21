@@ -2558,7 +2558,7 @@ public class ShiroDbRealmImpl extends ShiroDbRealm {
         if(EmptyUtil.isNullOrEmpty(user)){
             throw new UnknownAccountException("账号不存在");
         }
-        //转换方法，将user对象转换为ShiroUser，只要属性一直即可赋值，类似BeanUtils那个
+        //转换方法，将user对象转换为ShiroUser，只要属性一样即可赋值，类似BeanUtils那个
         ShiroUser shiroUser = BeanConv.toBean(user, ShiroUser.class);
         shiroUser.setResourceIds(userBridgeService.findResourcesIdsList(user.getId()));
         String salt = user.getSalt();
@@ -6173,4 +6173,1174 @@ JSP 与IDEA 与SpringBoo存在一定的**不兼容**，修改此配置即可解�
 ![image-20220320212709891](shiro讲义.assets/image-20220320212709891.png)
 
 ![image-20210129102527414](shiro讲义.assets/c521fe8e3781699d4ad914c010ac2f63.png)
+
+### jsp文件
+
+index.jsp
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+<%--    受限资源--%>
+    <h1>系统主页</h1>
+    <ul>
+        <li><a href="#">用户管理</a></li>
+        <li><a href="#">商品管理</a></li>
+        <li><a href="#">订单管理</a></li>
+        <li><a href="#">物流管理</a></li>
+    </ul>
+</body>
+</html>
+```
+
+login.jsp作为登录页面
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <h1>登录界面</h1>
+    <form action="${pageContext.request.contextPath}/user/login" method="post">
+        用户名:<input type="text" name="username" > <br/>
+        密码  : <input type="text" name="password"> <br>
+        <input type="submit" value="登录">
+    </form>
+</body>
+</html>
+
+```
+
+简单测试启动项目访问：localhost:8888/shiro
+
+## 简单使用
+
+### 创建配置类
+
+用于整合shiro框架所需要的配置类 ShiroConfig
+
+其中分为步骤：
+
+1. 首先创建shiroFilter  负责拦截所有请求
+2. 创建安全管理器
+3. 创建自定义realm
+
+### ShiroConfig
+
+```java
+package com.lut.config;
+
+import com.lut.shiro.realms.CustomerRealm;
+import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 用来整合shiro框架相关的配置类
+ */
+@Configuration
+public class ShiroConfig {
+
+    //1.创建shiroFilter  //负责拦截所有请求
+    @Bean
+    public ShiroFilterFactoryBean getShiroFilterFactoryBean(DefaultWebSecurityManager defaultWebSecurityManager){
+
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+        //给filter设置安全管理器
+        shiroFilterFactoryBean.setSecurityManager(defaultWebSecurityManager);
+
+        //配置系统受限资源
+        //配置系统公共资源
+        Map<String,String> map = new HashMap<String,String>();
+
+        map.put("/index.jsp","authc");//authc 请求这个资源需要认证和授权
+
+        //默认认证界面路径---当认证不通过时跳转
+        shiroFilterFactoryBean.setLoginUrl("/login.jsp");
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(map);
+
+        return shiroFilterFactoryBean;
+    }
+
+    //2.创建安全管理器
+    @Bean
+    public DefaultWebSecurityManager getDefaultWebSecurityManager(Realm realm){
+        DefaultWebSecurityManager defaultWebSecurityManager = new DefaultWebSecurityManager();
+        //给安全管理器设置
+        defaultWebSecurityManager.setRealm(realm);
+
+        return defaultWebSecurityManager;
+    }
+
+    //3.创建自定义realm
+    @Bean
+    public Realm getRealm(){
+        CustomerRealm customerRealm = new CustomerRealm();
+
+        return customerRealm;
+    }
+
+}
+```
+
+### 自定义realm
+
+```java
+package com.lut.shiro.realms;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
+
+import java.util.List;
+
+
+//自定义realm
+public class CustomerRealm extends AuthorizingRealm {
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        return null;
+    }
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+        return null;
+    }
+
+}
+```
+
+### 简单测试
+
+访问：http://localhost:8080/shiro/index.jsp
+
+由于没有验证成功，会跳转到登录页面
+
+## 常见过滤器
+
+- 注意: **shiro提供和多个默认的过滤器，我们可以用这些过滤器来配置控制指定url的权限：**
+
+|     配置缩写      |          对应的过滤器          |                             功能                             |
+| :---------------: | :----------------------------: | :----------------------------------------------------------: |
+|     **anon**      |        AnonymousFilter         |         指定url可以匿名访问（访问时不需要认证授权）          |
+|     **authc**     |    FormAuthenticationFilter    | 指定url需要form表单登录，默认会从请求中获取username、password,rememberMe等参数并尝试登录，如果登录不了就会跳转到loginUrl配置的路径。我们也可以用这个过滤器做默认的登录逻辑，但是一般都是我们自己在控制器写登录逻辑的，自己写的话出错返回的信息都可以定制嘛。 |
+|    authcBasic     | BasicHttpAuthenticationFilter  |                     指定url需要basic登录                     |
+|      logout       |          LogoutFilter          |     登出过滤器，配置指定url就可以实现退出功能，非常方便      |
+| noSessionCreation |    NoSessionCreationFilter     |                         禁止创建会话                         |
+|       perms       | PermissionsAuthorizationFilter |                     需要指定权限才能访问                     |
+|       port        |           PortFilter           |                     需要指定端口才能访问                     |
+|       rest        |   HttpMethodPermissionFilter   | 将http请求方法转化成相应的动词来构造一个权限字符串，这个感觉意义不大，有兴趣自己看源码的注释 |
+|       roles       |    RolesAuthorizationFilter    |                     需要指定角色才能访问                     |
+
+| ssl  | SslFilter  |       需要https请求才能访问        |
+| :--: | :--------: | :--------------------------------: |
+| user | UserFilter | 需要已登录或“记住我”的用户才能访问 |
+
+## 认证和退出实现
+
+### 登录实现
+
+#### 1.login.jsp
+
+增加登录表单
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <h1>登录界面</h1>
+    <form action="${pageContext.request.contextPath}/user/login" method="post">
+        用户名:<input type="text" name="username" > <br/>
+        密码  : <input type="text" name="password"> <br>
+        <input type="submit" value="登录">
+    </form>
+</body>
+</html>
+```
+
+![image-20210129130149681](shiro讲义.assets/b68e76ab37bf5dc6445deacdd6d41990.png)
+
+#### 2.UserController
+
+登录方法
+
+```java
+package com.lut.controller;
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import java.io.IOException;
+
+@Controller
+@RequestMapping("user")
+public class UserController {
+
+    /**
+     * 用来处理身份认证
+     * @param username
+     * @param password
+     * @return
+     */
+    @RequestMapping("login")
+    public String login(String username, String password) {
+        try {
+            //获取主体对象
+            Subject subject = SecurityUtils.getSubject();
+            subject.login(new UsernamePasswordToken(username, password));
+            return "redirect:/index.jsp";
+        } catch (UnknownAccountException e) {
+            e.printStackTrace();
+            System.out.println("用户名错误!");
+        } catch (IncorrectCredentialsException e) {
+            e.printStackTrace();
+            System.out.println("密码错误!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
+
+        return "redirect:/login.jsp";
+    }
+
+
+}
+```
+
+- **在认证过程中使用subject.login进行认证**
+
+#### 3.自定义Realm
+
+认证方法
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.realms;
+
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+
+//自定义Realm
+public class CustomerRealm extends AuthorizingRealm {
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        return null;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        System.out.println("=========================");
+        //先伪造数据库操作
+        //用户名
+        String principal = (String) authenticationToken.getPrincipal();
+        if("xiaochen".equals(principal)){//第三个参数是realm的名字
+            return new SimpleAuthenticationInfo(principal,"123",this.getName());
+        }
+        return null;
+    }
+}
+```
+
+测试，只有是xiaochen用户名和123密码才能登录
+
+### 退出认证
+
+#### 1.index.jsp
+
+添加登出链接
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+    <%--    受限资源--%>
+    <h1>系统主页</h1>
+    <a href="${pageContext.request.contextPath}/user/logout">退出用户</a>
+    <ul>
+        <li><a href="#">用户管理</a></li>
+        <li><a href="#">商品管理</a></li>
+        <li><a href="#">订单管理</a></li>
+        <li><a href="#">物流管理</a></li>
+    </ul>
+
+
+</body>
+</html>
+```
+
+#### 2.UserController
+
+增加登出方法
+
+```java
+package com.lut.controller;
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import java.io.IOException;
+
+@Controller
+@RequestMapping("user")
+public class UserController {
+
+
+    /**
+     * 退出登录
+     */
+    @RequestMapping("logout")
+    public String logout() {
+        Subject subject = SecurityUtils.getSubject();
+        subject.logout();//退出用户
+        return "redirect:/login.jsp";
+    }
+
+    /**
+     * 用来处理身份认证
+     * @param username
+     * @param password
+     * @return
+     */
+    @RequestMapping("login")
+    public String login(String username, String password) {
+        try {
+            //获取主体对象
+            Subject subject = SecurityUtils.getSubject();
+            subject.login(new UsernamePasswordToken(username, password));
+            return "redirect:/index.jsp";
+        } catch (UnknownAccountException e) {
+            e.printStackTrace();
+            System.out.println("用户名错误!");
+        } catch (IncorrectCredentialsException e) {
+            e.printStackTrace();
+            System.out.println("密码错误!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
+
+        return "redirect:/login.jsp";
+    }
+
+
+}
+```
+
+#### 3.测试
+
+登录正常，登出正常，未登录和登出后不能访问index.jsp
+
+### ShiroConfig
+
+主要的Shiro配置类中声明：哪些是需要验证的资源，哪些是公开的资源
+
+**注意：先配置公共资源，后配置需要认证/授权的资源**
+
+此时认证功能没有md5和随机盐的认证
+
+```java
+package com.sucker.springboot_jsp_shiro.config;
+
+import com.sucker.springboot_jsp_shiro.shiro.realms.CustomerRealm;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ *  用来整合shiro框架相关的配置
+ */
+@Configuration
+public class ShiroConfig {
+
+    //1.创建shiroFilter  负责拦截所有请求
+    @Bean
+    public ShiroFilterFactoryBean getShiroFilterFactoryBean(DefaultWebSecurityManager defaultWebSecurityManager){
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+
+        //给filter设置安全管理器
+        shiroFilterFactoryBean.setSecurityManager(defaultWebSecurityManager);
+
+        //配置系统受限资源
+        //配置系统公共资源
+        Map<String ,String> map  = new HashMap<>();
+        //注意顺序，不受限的资源放在上面
+        map.put("/user/login","anon");//anon设置为公共资源
+        map.put("/**","authc");//authc 请求这个资源需要认证和授权
+
+        //默认认证界面：就是login.jsp，这里是再配置一下
+        shiroFilterFactoryBean.setLoginUrl("/login.jsp");
+
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(map);
+
+        return shiroFilterFactoryBean;
+    }
+    //2.创建安全管理器
+    @Bean
+    public DefaultWebSecurityManager getDefaultWebSecurityManager(Realm realm){
+        DefaultWebSecurityManager defaultWebSecurityManager = new DefaultWebSecurityManager();
+
+        //给安全管理器设置realm
+        defaultWebSecurityManager.setRealm(realm);
+
+        return defaultWebSecurityManager;
+    }
+
+    //创建以定义realm
+    @Bean
+    public Realm getRealm(){
+        return new CustomerRealm();
+    }
+
+}
+```
+
+## MD5、Salt的认证实现
+
+### 用户注册+随机盐处理
+
+#### 创建注册界面
+
+register.jsp
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <h1>注册界面</h1>
+
+    <form action="${pageContext.request.contextPath}/user/register" method="post">
+        用户名:<input type="text" name="username" > <br/>
+        密码  : <input type="text" name="password"> <br>
+        <input type="submit" value="立即注册">
+    </form>
+</body>
+</html>
+```
+
+更改ShiroConfig中的拦截
+
+```java
+package com.sucker.springboot_jsp_shiro.config;
+
+import com.sucker.springboot_jsp_shiro.shiro.realms.CustomerRealm;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ *  用来整合shiro框架相关的配置
+ */
+@Configuration
+public class ShiroConfig {
+
+    //1.创建shiroFilter  负责拦截所有请求
+    @Bean
+    public ShiroFilterFactoryBean getShiroFilterFactoryBean(DefaultWebSecurityManager defaultWebSecurityManager){
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+
+        //给filter设置安全管理器
+        shiroFilterFactoryBean.setSecurityManager(defaultWebSecurityManager);
+
+        //配置系统受限资源
+        //配置系统公共资源
+        Map<String ,String> map  = new HashMap<>();
+        //注意顺序，不受限的资源放在上面
+        //这里user下面的东西或许可以使用/user/**
+        map.put("/user/login","anon");//anon设置为公共资源
+        map.put("/user/register","anon");//anon设置为公共资源
+        map.put("/register.jsp","anon");//anon设置为公共资源
+        map.put("/**","authc");//authc 请求这个资源需要认证和授权
+
+        //默认认证界面：就是login.jsp，这里是再配置一下
+        shiroFilterFactoryBean.setLoginUrl("/login.jsp");
+
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(map);
+
+        return shiroFilterFactoryBean;
+    }
+    //2.创建安全管理器
+    @Bean
+    public DefaultWebSecurityManager getDefaultWebSecurityManager(Realm realm){
+        DefaultWebSecurityManager defaultWebSecurityManager = new DefaultWebSecurityManager();
+
+        //给安全管理器设置realm
+        defaultWebSecurityManager.setRealm(realm);
+
+        return defaultWebSecurityManager;
+    }
+
+    //创建以定义realm
+    @Bean
+    public Realm getRealm(){
+        return new CustomerRealm();
+    }
+
+}
+```
+
+
+
+#### 创建数据库
+
+创建数据库shiro和表t_user
+
+注意 id 要是自增
+
+![image-20220321170454698](shiro讲义.assets/image-20220321170454698.png)
+
+#### 导入依赖
+
+```xml
+<!--mybatis相关依赖-->
+<dependency>
+  <groupId>org.mybatis.spring.boot</groupId>
+  <artifactId>mybatis-spring-boot-starter</artifactId>
+  <version>2.1.2</version>
+</dependency>
+
+<!--mysql-->
+<dependency>
+  <groupId>mysql</groupId>
+  <artifactId>mysql-connector-java</artifactId>
+  <version>5.1.38</version>
+</dependency>
+
+
+<!--druid-->
+<dependency>
+  <groupId>com.alibaba</groupId>
+  <artifactId>druid</artifactId>
+  <version>1.1.19</version>
+</dependency>
+
+```
+
+#### application.properties
+
+```properties
+spring.datasource.type=com.alibaba.druid.pool.DruidDataSource
+spring.datasource.driver-class-name=com.mysql.jdbc.Driver
+spring.datasource.url=jdbc:mysql://localhost:3306/shiro?characterEncoding=UTF-8
+spring.datasource.username=root
+spring.datasource.password=123456
+
+mybatis.type-aliases-package=com.sucker.springboot_jsp_shiro.entity
+mybatis.mapper-locations=classpath:mapper/*.xml
+
+```
+
+注意创建resources目录下的mapper包和主目录下的entity实体类包
+
+#### 创建entity
+
+```java
+package com.sucker.springboot_jsp_shiro.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+@Data
+@Accessors(chain = true)//链式调用
+@AllArgsConstructor
+@NoArgsConstructor
+public class User {
+    private String  id;
+    private String username;
+    private String password;
+    private String salt;
+}
+```
+
+#### 创建dao接口
+
+创建一个dao目录以及UserDAO接口
+
+```java
+package com.sucker.springboot_jsp_shiro.dao;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface UserDAO {
+
+    void save(User user);
+
+}
+```
+
+#### 开发mapper配置文件
+
+注意：mapper文件的位置要在 application.properties配置的目录下面
+
+**注意：mapper文件的命名 与 Dao接口保持一致**
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sucker.springboot_jsp_shiro.dao.UserDAO">
+<!--useGeneratedKeys其本意是说：对于支持自动生成记录主键的数据库，如：MySQL，SQL Server，此时设置useGeneratedKeys参数值为true，在执行添加记录之后可以获取到数据库自动生成的主键ID。-->
+<!--    keyProperty和useGeneratedKeys搭配指定主键参数-->
+    <insert id="save" parameterType="User" useGeneratedKeys="true" keyProperty="id">
+        insert into t_user values(#{id},#{username},#{password},#{salt})
+    </insert>
+
+</mapper>
+
+```
+
+**在图中，标红的地方要保持命名一致，不然会有莫名其妙的BUG**
+
+![image-20210129140745067](shiro讲义.assets/35d23af18fe1f2002841269319028516.png)
+
+#### 开发service接口
+
+```java
+package com.sucker.springboot_jsp_shiro.service;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+
+public interface UserService {
+    //注册用户
+    void register(User user);
+
+}
+```
+
+#### 创建salt工具类
+
+创建utils包和工具类
+
+```java
+package com.sucker.springboot_jsp_shiro.utils;
+
+import java.util.Random;
+
+public class SaltUtils {
+    /**
+     * 生成salt的静态方法，取n位
+     * @param n
+     * @return
+     */
+    public static String getSalt(int n){
+        //随机字符数组
+        char[] chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890!@#$%^&*()".toCharArray();
+        //用于返回结果
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            //每次随机取一个字符再拼接
+            char aChar = chars[new Random().nextInt(chars.length)];
+            sb.append(aChar);
+        }
+        return sb.toString();
+    }
+
+    public static void main(String[] args) {
+        String salt = getSalt(4);
+        System.out.println(salt);
+    }
+}
+```
+
+#### 开发service实现类
+
+```java
+package com.sucker.springboot_jsp_shiro.service;
+
+import com.sucker.springboot_jsp_shiro.dao.UserDAO;
+import com.sucker.springboot_jsp_shiro.entity.User;
+import com.sucker.springboot_jsp_shiro.utils.SaltUtils;
+import org.apache.shiro.crypto.hash.Md5Hash;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional//简而言之，@Transactional注解在代码执行出错的时候能够进行事务的回滚
+public class UserServiceImpl implements UserService{
+
+    @Autowired
+    private UserDAO userDAO;
+
+    @Override
+    public void register(User user) {
+        //处理业务调用dao
+        //明文密码进行md5 + salt + hash散列
+        //调用shiro自带方法，第三个参数是散列次数
+
+        //1.生成随机盐
+        String salt = SaltUtils.getSalt(8);
+        //将随机盐保存到数据库
+        user.setSalt(salt);
+        //3.明文密码加密加盐加散列
+        Md5Hash md5Hash = new Md5Hash(user.getPassword(), "", 1024);
+        user.setPassword(md5Hash.toHex());
+        userDAO.save(user);
+    }
+}
+```
+
+#### Controller中增加注册接口
+
+```java
+package com.sucker.springboot_jsp_shiro.controller;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+import com.sucker.springboot_jsp_shiro.service.UserService;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+@RequestMapping("user")
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    /**
+     * 用来处理身份认证
+     * @param username
+     * @param password
+     * @return
+     */
+    @RequestMapping("login")
+    public String login(String username,String password){
+
+        //获取主体对象,只要在shiroconfig中配置了安全管理器，就会在安全工具类自动注入安全管理器SecurityManager
+        Subject subject = SecurityUtils.getSubject();
+        //封装Token
+        try {
+            subject.login(new UsernamePasswordToken(username, password));
+            return "redirect:/index.jsp";
+        } catch (UnknownAccountException e) {
+            e.printStackTrace();
+            System.out.println("用户名错误");
+        }catch (IncorrectCredentialsException e){
+            e.printStackTrace();
+            System.out.println("密码错误");
+        }
+        return "redirect:/login.jsp";
+    }
+
+    /**
+     * 退出登录
+     */
+    public String logout(){
+        Subject subject = SecurityUtils.getSubject();
+        subject.logout();//退出用户
+        return "redirect:/login.jsp";
+    }
+
+    /**
+     * 用户注册
+     * @param user
+     * @return
+     */
+    public String register(User user){
+        try {
+            userService.register(user);
+            return "redirect:/login.jsp";
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "redirect:/register.jsp";
+        }
+
+    }
+
+
+}
+```
+
+#### 测试
+
+注册成功
+
+![image-20220321180650538](shiro讲义.assets/image-20220321180650538.png)
+
+### 数据库认证
+
+#### 开发Dao
+
+增加一个通过用户名查找用户的方法
+
+```java
+package com.sucker.springboot_jsp_shiro.dao;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface UserDAO {
+
+    //增加一个用户
+    void save(User user);
+
+    //通过用户名查找user
+    User findByUserName(String userName);
+
+}
+```
+
+#### mapper配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sucker.springboot_jsp_shiro.dao.UserDAO">
+<!--useGeneratedKeys其本意是说：对于支持自动生成记录主键的数据库，如：MySQL，SQL Server，此时设置useGeneratedKeys参数值为true，在执行添加记录之后可以获取到数据库自动生成的主键ID。-->
+<!--    keyProperty和useGeneratedKeys搭配指定主键参数-->
+    <insert id="save" parameterType="User" useGeneratedKeys="true" keyProperty="id">
+        insert into t_user values(#{id},#{username},#{password},#{salt})
+    </insert>
+    
+    <select id="findByUserName" parameterType="String" resultType="User">
+        select id,username,password,salt from t_user
+        where username = #{username}
+    </select>
+
+</mapper>
+```
+
+#### service接口
+
+```java
+package com.sucker.springboot_jsp_shiro.service;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+
+public interface UserService {
+    //注册用户
+    void register(User user);
+
+    //根据用户名查询用户
+    User findByUserName(String userName);
+
+}
+```
+
+#### service实现类
+
+**注意：这里没有添加注解：@Service(“userService”)，因为直接使用了@Autowired在自定义Realm中注入了，所以不需要通过工具类从工厂中获得这个service**
+
+```java
+package com.sucker.springboot_jsp_shiro.service;
+
+import com.sucker.springboot_jsp_shiro.dao.UserDAO;
+import com.sucker.springboot_jsp_shiro.entity.User;
+import com.sucker.springboot_jsp_shiro.utils.SaltUtils;
+import org.apache.shiro.crypto.hash.Md5Hash;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional//简而言之，@Transactional注解在代码执行出错的时候能够进行事务的回滚
+public class UserServiceImpl implements UserService{
+
+    @Autowired
+    private UserDAO userDAO;
+
+    //注册
+    @Override
+    public void register(User user) {
+        //处理业务调用dao
+        //明文密码进行md5 + salt + hash散列
+        //调用shiro自带方法，第三个参数是散列次数
+
+        //1.生成随机盐
+        String salt = SaltUtils.getSalt(8);
+        //将随机盐保存到数据库
+        user.setSalt(salt);
+        //3.明文密码加密加盐加散列
+        Md5Hash md5Hash = new Md5Hash(user.getPassword(), salt, 1024);
+        user.setPassword(md5Hash.toHex());
+        userDAO.save(user);
+    }
+
+    //根据用户名查询用户
+    @Override
+    public User findByUserName(String userName) {
+        return userDAO.findByUserName(userName);
+    }
+}
+```
+
+#### 开发工厂工具类
+
+这里没有使用这个，因为使用了@Autowired注入了
+
+**在工厂中获取bean对象的工具类**
+
+ApplicationContextUtils
+
+```java
+package com.lut.utils;
+
+import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ApplicationContextUtils implements ApplicationContextAware {
+
+    private static ApplicationContext context;
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.context = applicationContext;
+    }
+
+    //根据bean名字获取工厂中指定bean 对象
+    public static Object getBean(String beanName){
+        System.out.println("beanName"+beanName);
+        Object object=context.getBean(beanName);
+        System.out.println("object"+object);
+        return context.getBean(beanName);
+    }
+}
+```
+
+#### 修改自定义realm
+
+通过数据库取得用户信息
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.realms;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+import com.sucker.springboot_jsp_shiro.service.UserService;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.util.ByteSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.ObjectUtils;
+
+//自定义Realm
+public class CustomerRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        return null;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        System.out.println("=========================");
+        //先伪造数据库操作
+        //用户名
+        String principal = (String) authenticationToken.getPrincipal();
+
+        User user = userService.findByUserName(principal);
+
+        if(!ObjectUtils.isEmpty(user)){
+            //密码认证shiro做
+            return new SimpleAuthenticationInfo(user.getUsername(),user.getPassword(), ByteSource.Util.bytes(user.getSalt()),this.getName());
+        }
+        return null;
+    }
+}
+```
+
+#### 修改ShiroConfig中realm
+
+由于我们的密码是加盐加密了，所以我们要修改自定义Realm中的凭证匹配器，以及hash散列
+
+以及在 getShiroFilterFactoryBean 中添加公共资源
+
+```java
+package com.sucker.springboot_jsp_shiro.config;
+
+import com.sucker.springboot_jsp_shiro.shiro.realms.CustomerRealm;
+import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ *  用来整合shiro框架相关的配置
+ */
+@Configuration
+public class ShiroConfig {
+
+    //1.创建shiroFilter  负责拦截所有请求
+    @Bean
+    public ShiroFilterFactoryBean getShiroFilterFactoryBean(DefaultWebSecurityManager defaultWebSecurityManager){
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+
+        //给filter设置安全管理器
+        shiroFilterFactoryBean.setSecurityManager(defaultWebSecurityManager);
+
+        //配置系统受限资源
+        //配置系统公共资源
+        Map<String ,String> map  = new HashMap<>();
+        //注意顺序，不受限的资源放在上面
+        //这里user下面的东西或许可以使用/user/**
+        map.put("/user/login","anon");//anon设置为公共资源
+        map.put("/user/register","anon");//anon设置为公共资源
+        map.put("/register.jsp","anon");//anon设置为公共资源
+
+        map.put("/**","authc");//authc 请求这个资源需要认证和授权
+
+        //默认认证界面：就是login.jsp，这里是再配置一下
+        shiroFilterFactoryBean.setLoginUrl("/login.jsp");
+
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(map);
+
+        return shiroFilterFactoryBean;
+    }
+    //2.创建安全管理器
+    @Bean
+    public DefaultWebSecurityManager getDefaultWebSecurityManager(Realm realm){
+        DefaultWebSecurityManager defaultWebSecurityManager = new DefaultWebSecurityManager();
+
+        //给安全管理器设置realm
+        defaultWebSecurityManager.setRealm(realm);
+
+        return defaultWebSecurityManager;
+    }
+
+    //创建以定义realm
+    @Bean
+    public Realm getRealm(){
+        CustomerRealm customerRealm = new CustomerRealm();
+        //修改凭证校验匹配器
+        HashedCredentialsMatcher credentialsMatcher = new HashedCredentialsMatcher();
+        //设置加密算法为md5
+        credentialsMatcher.setHashAlgorithmName("md5");
+        //设置散列次数
+        credentialsMatcher.setHashIterations(1024);
+        customerRealm.setCredentialsMatcher(credentialsMatcher);
+
+        return  customerRealm;
+    }
+
+}
+```
+
+测试成功
+
+## 授权实现
+
+授权可以使用编程式，即代码实现判断权限，也可以使用在页面上使用标签判断，也可以使用注解方式
+
+### 无数据库版
+
+##### 页面资源授权
 
