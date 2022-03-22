@@ -7344,3 +7344,520 @@ public class ShiroConfig {
 
 ##### 页面资源授权
 
+index.jsp，引入shiro标签
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<%@taglib prefix="shiro" uri="http://shiro.apache.org/tags" %>
+<!doctype html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+    <%--    受限资源--%>
+    <h1>系统主页</h1>
+    <a href="${pageContext.request.contextPath}/user/logout">退出用户</a>
+    <ul>
+        <shiro:hasAnyRoles name="user,admin">
+            <li><a href="#">用户管理</a>
+                <ul>
+                    <shiro:hasPermission name="user:add:*">
+                        <li><a href="">添加</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="user:delete:*">
+                        <li><a href="">删除</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="user:update:*">
+                        <li><a href="">修改</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="user:find:*">
+                        <li><a href="">查询</a></li>
+                    </shiro:hasPermission>
+                </ul>
+            </li>
+        </shiro:hasAnyRoles>
+        <shiro:hasRole name="admin">
+            <li><a href="#">商品管理</a></li>
+            <li><a href="#">订单管理</a></li>
+            <li><a href="#">物流管理</a></li>
+        </shiro:hasRole>
+    </ul>
+
+
+</body>
+</html>
+```
+
+在自定义的Realm中为 sucker 用户增加角色和权限
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.realms;
+
+import com.sucker.springboot_jsp_shiro.entity.User;
+import com.sucker.springboot_jsp_shiro.service.UserService;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.util.ByteSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.ObjectUtils;
+
+//自定义Realm
+public class CustomerRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+
+        //获取身份信息
+        String primaryPrincipal = (String) principalCollection.getPrimaryPrincipal();
+        System.out.println("调用授权验证；"+ primaryPrincipal);
+
+        //根据主身份信息获取 角色 和 权限信息
+        if("sucker".equals(primaryPrincipal)){
+            SimpleAuthorizationInfo simpleAuthorizationInfo = new SimpleAuthorizationInfo();
+
+            simpleAuthorizationInfo.addRole("admin");
+            simpleAuthorizationInfo.addRole("user");
+
+            //权限字符串，对user下面的所有资源具有所有权限，中间的*是权限，后面的是资源
+            simpleAuthorizationInfo.addStringPermission("user:find:*");
+            simpleAuthorizationInfo.addStringPermission("user:update:*");
+
+            return simpleAuthorizationInfo;
+        }
+
+        return null;
+    }
+}
+```
+
+##### 创建新的orderController，使用代码方式授权
+
+```java
+@RequestMapping("save")
+public String save(){
+  System.out.println("进入方法");
+  
+  //基于角色
+  //获取主体对象
+  Subject subject = SecurityUtils.getSubject();
+  //代码方式
+  if (subject.hasRole("admin")) {
+    System.out.println("保存订单!");
+  }else{
+    System.out.println("无权访问!");
+  }
+  //基于权限字符串
+  //....
+  return "redirect:/index.jsp";
+}
+```
+
+##### 使用注解方式
+
+```java
+import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.apache.shiro.authz.annotation.RequiresRoles;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+@RequestMapping("order")
+public class OrderController {
+
+    @RequiresRoles(value={"admin","user"})//用来判断角色  同时具有 admin user
+    @RequiresPermissions("user:update:01") //用来判断权限字符串
+    @RequestMapping("save")
+    public String save(){
+        System.out.println("进入方法");
+        return "redirect:/index.jsp";
+    }
+
+}
+
+```
+
+### 连接数据库
+
+#### 授权数据持久化
+
+典型多对多关系
+
+![image-20200527204839080](shiro讲义.assets/22f9601b4e44546152bcb77840022607.png)
+
+```sql
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------
+-- Table structure for t_perms
+-- ----------------------------
+DROP TABLE IF EXISTS `t_perms`;
+CREATE TABLE `t_pers` (
+  `id` int(6) NOT NULL AUTO_INCREMENT,
+  `name` varchar(80) DEFAULT NULL,
+  `url` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- ----------------------------
+-- Table structure for t_role
+-- ----------------------------
+DROP TABLE IF EXISTS `t_role`;
+CREATE TABLE `t_role` (
+  `id` int(6) NOT NULL AUTO_INCREMENT,
+  `name` varchar(60) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- ----------------------------
+-- Table structure for t_role_perms
+-- ----------------------------
+DROP TABLE IF EXISTS `t_role_perms`;
+CREATE TABLE `t_role_perms` (
+  `id` int(6) NOT NULL,
+  `roleid` int(6) DEFAULT NULL,
+  `permsid` int(6) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- ----------------------------
+-- Table structure for t_user
+-- ----------------------------
+DROP TABLE IF EXISTS `t_user`;
+CREATE TABLE `t_user` (
+  `id` int(6) NOT NULL AUTO_INCREMENT,
+  `username` varchar(40) DEFAULT NULL,
+  `password` varchar(40) DEFAULT NULL,
+  `salt` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+
+-- ----------------------------
+-- Table structure for t_user_role
+-- ----------------------------
+DROP TABLE IF EXISTS `t_user_role`;
+CREATE TABLE `t_user_role` (
+  `id` int(6) NOT NULL,
+  `userid` int(6) DEFAULT NULL,
+  `roleid` int(6) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+SET FOREIGN_KEY_CHECKS = 1;
+```
+
+创建数据库
+
+![image-20220322152412840](shiro讲义.assets/image-20220322152412840.png)
+
+![image-20220322152749627](shiro讲义.assets/image-20220322152749627.png)
+
+role表
+
+![image-20220322152801574](shiro讲义.assets/image-20220322152801574.png)
+
+user_role表
+
+![image-20220322152814824](shiro讲义.assets/image-20220322152814824.png)
+
+创建实体类
+
+User表增加字段
+
+```java
+package com.sucker.springboot_jsp_shiro.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+import java.util.List;
+
+@Data
+@Accessors(chain = true)//链式调用
+@AllArgsConstructor
+@NoArgsConstructor
+public class User {
+    private String  id;
+    private String username;
+    private String password;
+    private String salt;
+
+    //一个用户可能有多个角色
+    private List<Role> roles;
+
+}
+```
+
+Role
+
+```java
+package com.sucker.springboot_jsp_shiro.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+@Data
+@Accessors(chain = true)//链式调用
+@AllArgsConstructor
+@NoArgsConstructor
+public class Role {
+
+    private String id;
+    private String name;
+    
+    //定义权限的集合
+    private List<Perms> perms;
+
+}
+```
+
+Perms
+
+```java
+package com.sucker.springboot_jsp_shiro.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+@Data
+@Accessors(chain = true)//链式调用
+@AllArgsConstructor
+@NoArgsConstructor
+public class Perms {
+
+    private String id;
+    private String name;
+    private String url;
+
+}
+```
+
+创建Dao层接口
+
+```java
+package com.sucker.springboot_jsp_shiro.dao;
+
+import com.sucker.springboot_jsp_shiro.entity.Role;
+import com.sucker.springboot_jsp_shiro.entity.User;
+import org.apache.ibatis.annotations.Mapper;
+
+import java.util.List;
+
+@Mapper
+public interface UserDAO {
+
+    //增加一个用户
+    void save(User user);
+
+    //通过用户名查找user
+    User findByUserName(String userName);
+
+    //根据用户名查询所有角色
+    List<Role> findRolesByUserName(String username);
+
+        //为了方便就不新建一个Dao了
+    //根据角色id查询权限集合
+    List<Perms> findPermsByRoleId(String id);
+    
+}
+```
+
+mapper实现，UserDaoMapper.xml增加
+
+```xml
+    <!--column 数据库中的字段  property实体类中的属性-->
+    <resultMap id="userMap" type="User">
+        <id column="uid" property="id"></id>
+        <result column="username" property="username"/>
+<!--        角色信息-->
+        <collection property="roles" javaType="list" ofType="Role">
+            <id column="id" property="id"></id>
+            <result column="rname" property="name"/>
+        </collection>
+    </resultMap>
+
+<!--    LEFT JOIN 关键字会从左表 (table_name1) 那里返回所有的行，即使在右表 (table_name2) 中没有匹配的行。-->
+    <select id="findRolesByUserName" parameterType="String" resultMap="userMap">
+        select u.id uid,u.username,r.id,r.NAME rname
+        from t_user u
+        left join t_user_role ur
+        on u.id=ur.userid
+        left join t_role r
+        on ur.roleid=r.id
+        where u.username=#{username}
+    </select>
+
+<!--    多个结果自动封装集合-->
+    <select id="findPermsByRoleId" parameterType="String" resultType="Perms">
+        select p.id,p.name, p.url,r.name from t_role r
+        left join t_role_perms rp
+        on r.id = rp.roleid
+        left join t_perms p
+        on rp.permsid = p.id
+        where r.id=#{id}
+    </select>
+```
+
+service接口
+
+```java
+    //为了方便就不新建一个Dao了
+    //根据角色id查询权限集合
+    List<Perms> findPermsByRoleId(String id);
+```
+
+service接口实现
+
+```java
+    //根据用户名查找用户对应所有角色
+    @Override
+    public User findRolesByUserName(String username) {
+        return userDAO.findRolesByUserName(username);
+    }
+
+    //根据角色id查询权限集合
+    @Override
+    public List<Perms> findPermsByRoleId(String id) {
+        return userDAO.findPermsByRoleId(id);
+    }
+```
+
+数据库中增加数据
+
+角色表
+
+![image-20220322173830353](shiro讲义.assets/image-20220322173830353.png)
+
+用户表
+
+![image-20220322173843210](shiro讲义.assets/image-20220322173843210.png)
+
+权限表
+
+![image-20220322173852404](shiro讲义.assets/image-20220322173852404.png)
+
+用户角色表
+
+![image-20220322173901826](shiro讲义.assets/image-20220322173901826.png)
+
+角色权限表
+
+![image-20220322173909743](shiro讲义.assets/image-20220322173909743.png)
+
+修改自定义Realm
+
+从数据库中获取角色和权限
+
+**注意：**如果你创建了一个用户，并为这个用户授予了一个角色，但这个角色并未关联任何的 授权字符串，那么调用数据库获得的结果是 List<Perms> perms=[null]，此时 perms已经被初始化，里面只有一个属性null，使用判空的方法无法判别，此时继续遍历会报出空指针异常，此时应当添加判断条件 perms.get(0)!=null
+
+```java
+//自定义Realm
+public class CustomerRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+
+        //获取身份信息
+        String primaryPrincipal = (String) principalCollection.getPrimaryPrincipal();
+        System.out.println("调用授权验证；"+ primaryPrincipal);
+
+        //根据主身份信息获取 角色 和 权限信息
+        User user = userService.findRolesByUserName(primaryPrincipal);
+        //授权角色信息，遍历集合
+        if(!CollectionUtils.isEmpty(user.getRoles())){
+            SimpleAuthorizationInfo simpleAuthorizationInfo = new SimpleAuthorizationInfo();
+            user.getRoles().forEach(role -> {
+                simpleAuthorizationInfo.addRole(role.getName());
+
+                //权限信息
+                List<Perms> perms = userService.findPermsByRoleId(role.getId());
+                if(!CollectionUtils.isEmpty(perms) && perms.get(0)!=null){
+                    perms.forEach(perm -> {
+                        simpleAuthorizationInfo.addStringPermission(perm.getName());
+                    });
+                }
+
+            });
+            return simpleAuthorizationInfo;
+        }
+        return null;
+    }
+}
+```
+
+修改index.jsp，把查询设置为order权限
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<%@taglib prefix="shiro" uri="http://shiro.apache.org/tags" %>
+<!doctype html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+    <%--    受限资源--%>
+    <h1>系统主页</h1>
+    <a href="${pageContext.request.contextPath}/user/logout">退出用户</a>
+    <ul>
+        <shiro:hasAnyRoles name="user,admin">
+            <li><a href="">用户管理</a>
+                <ul>
+                    <shiro:hasPermission name="user:add:*">
+                        <li><a href="">添加</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="user:delete:*">
+                        <li><a href="">删除</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="user:update:*">
+                        <li><a href="">修改</a></li>
+                    </shiro:hasPermission>
+                    <shiro:hasPermission name="order:*:*">
+                        <li><a href="">查询</a></li>
+                    </shiro:hasPermission>
+                </ul>
+            </li>
+        </shiro:hasAnyRoles>
+        <shiro:hasRole name="admin">
+            <li><a href="#">商品管理</a></li>
+            <li><a href="#">订单管理</a></li>
+            <li><a href="#">物流管理</a></li>
+        </shiro:hasRole>
+    </ul>
+
+
+</body>
+</html>
+```
+
+用户sucker，具有admin角色，具有所有权限
+
+用户zhangsan，具有user和product角色，具有user和product权限，没有order权限
+
