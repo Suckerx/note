@@ -2704,11 +2704,18 @@ docker pull mysql:5.7
 ```
 docker run  -p 6379:6379 --name myr3 --privileged=true -v /app/redis/redis.conf:/etc/redis/redis.conf -v /app/redis/data:/data -d redis:6.0.8 redis-server /etc/redis/redis.conf
 docker ps
-docker exec -it myr3 /bin/bash
+docker exec -it kmyr3 /bin/bash
 redis-cli
 set k1 v1
 get k1
 ping
+```
+
+这一步创建容器的时候，可能出错，名字已经被一个容器占用，可以使用以下命令删除对应的容器
+
+```
+docker ps -a
+docker rm 3874ac36fb2e
 ```
 
 - 请证明docker启动使用了我们自己指定的配置文件

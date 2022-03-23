@@ -7861,3 +7861,82 @@ public class CustomerRealm extends AuthorizingRealm {
 
 用户zhangsan，具有user和product角色，具有user和product权限，没有order权限
 
+## 缓存问题，使用CacheManager
+
+#### Cache 作用
+
+- Cache 缓存: **计算机内存中一段数据**
+- 作用: **用来减轻DB的访问压力,从而提高系统的查询效率**
+- 流程:  如果没有缓存，每次访问页面或调用接口都要执行授权，会造成数据库压力过大![image-20200530090656417](shiro讲义.assets/bc4e606c8eb9cd230dba11edc9693bb2.png)
+
+#### 使用shiro中默认的EhCache实现缓存
+
+引入依赖
+
+```xml
+<!--引入shiro和ehcache-->
+<dependency>
+  <groupId>org.apache.shiro</groupId>
+  <artifactId>shiro-ehcache</artifactId>
+  <version>1.5.3</version>
+</dependency>
+```
+
+修改自定义Realm，开启全局缓存，开启授权和认证的缓存
+
+```java
+//3.创建自定义realm
+    @Bean
+    public Realm getRealm(){
+        CustomerRealm customerRealm = new CustomerRealm();
+        //修改凭证校验匹配器
+        HashedCredentialsMatcher credentialsMatcher = new HashedCredentialsMatcher();
+        //设置加密算法为md5
+        credentialsMatcher.setHashAlgorithmName("MD5");
+        //设置散列次数
+        credentialsMatcher.setHashIterations(1024);
+        customerRealm.setCredentialsMatcher(credentialsMatcher);
+
+        //开启缓存管理器
+        customerRealm.setCachingEnabled(true);//开启全局缓存
+        customerRealm.setAuthenticationCachingEnabled(true);//开启认证缓存
+        customerRealm.setAuthenticationCachingName("authenticationCache");//设置认证的缓存名字
+        customerRealm.setAuthorizationCachingEnabled(true);//开启授权缓存
+        customerRealm.setAuthorizationCachingName("authorizationCache");//设置授权的缓存名字
+        customerRealm.setCacheManager(new EhCacheManager());
+        return customerRealm;
+    }
+
+```
+
+##### 启动刷新页面进行测试
+
+- 注意:如果控制台没有任何sql展示说明缓存已经开启
+
+EhCache实现的还是本地缓存（应用内部缓存），重启就还是要查数据库，用Redis可以实现分布式缓存
+
+### shiro中使用redis作为缓存实现
+
+引入依赖
+
+```xml
+<!--redis整合springboot-->
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+```
+
+配置redis连接，application.properties中
+
+```properties
+spring.redis.port=6379
+spring.redis.host=101....
+spring.redis.database=0
+```
+
+启动redis服务，此处使用的是docker中的redis，可以参考docker笔记
+
+![image-20220323220054097](shiro讲义.assets/image-20220323220054097.png)
+
