@@ -7940,3 +7940,745 @@ spring.redis.database=0
 
 ![image-20220323220054097](shiro讲义.assets/image-20220323220054097.png)
 
+开发工厂工具类
+
+**在工厂中获取bean对象的工具类**
+
+ApplicationContextUtils
+
+```java
+
+
+import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ApplicationContextUtils implements ApplicationContextAware {
+
+    private static ApplicationContext context;
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.context = applicationContext;
+    }
+
+    //根据bean名字获取工厂中指定bean 对象
+    public static Object getBean(String beanName){
+        System.out.println("beanName"+beanName);
+        Object object=context.getBean(beanName);
+        System.out.println("object"+object);
+        return context.getBean(beanName);
+    }
+}
+
+```
+
+**自定义shiro缓存管理器**
+
+implements CacheManager
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.cache;
+
+import org.apache.shiro.cache.Cache;
+import org.apache.shiro.cache.CacheException;
+import org.apache.shiro.cache.CacheManager;
+
+//自定义shiro缓存管理器
+public class RedisCacheManager implements CacheManager {
+
+    /**
+     *
+     * @param cacheName  认证或者授权缓存的统一名称
+     * @param <K>
+     * @param <V>
+     * @return
+     * @throws CacheException
+     */
+    @Override
+    public <K, V> Cache<K, V> getCache(String cacheName) throws CacheException {
+        System.out.println(cacheName);
+        return new RedisCache<K,V>(cacheName);
+    }
+}
+```
+
+**自定义redis缓存的实现**
+
+其中使用上面工厂工具类，获得redisTemplate
+
+使用 put 和 get 方法设置键和值
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.cache;
+
+import com.sucker.springboot_jsp_shiro.utils.ApplicationContextUtils;
+import org.apache.shiro.cache.Cache;
+import org.apache.shiro.cache.CacheException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
+import java.util.Collection;
+import java.util.Set;
+
+//自定义redis缓存的实现，需要实现Cache接口
+public class RedisCache<k,v> implements Cache<k,v> {
+
+//    @Autowired
+//    private RedisTemplate redisTemplate;
+
+    private String cacheName;
+
+    public RedisCache(){ }
+
+    public RedisCache(String cacheName){this.cacheName = cacheName;}
+
+    @Override
+    public v get(k k) throws CacheException {
+        System.out.println("get key: "+k);
+        //redisTemplate默认是对对象进行操作的，而key是一个字符串，value才是一个对象
+        //所以把key的序列化方式改为String的序列化方式
+        return (v) getRedisTemplate().opsForHash().get(this.cacheName,k.toString());
+    }
+
+    @Override
+    public v put(k k, v v) throws CacheException {
+        System.out.println("put key: "+k);
+        System.out.println("put value: "+v);
+        //redisTemplate默认是对对象进行操作的，而key是一个字符串，value才是一个对象
+        //所以把key的序列化方式改为String的序列化方式
+        getRedisTemplate().opsForHash().put(this.cacheName,k.toString(),v);
+        return null;
+    }
+
+    @Override
+    public v remove(k k) throws CacheException {
+        return null;
+    }
+
+    @Override
+    public void clear() throws CacheException {
+
+    }
+
+    @Override
+    public int size() {
+        return 0;
+    }
+
+    @Override
+    public Set<k> keys() {
+        return null;
+    }
+
+    @Override
+    public Collection<v> values() {
+        return null;
+    }
+
+    private RedisTemplate getRedisTemplate(){
+        RedisTemplate redisTemplate = (RedisTemplate) ApplicationContextUtils.getBean("redisTemplate");
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        //内部的Map中的String序列化
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+        return redisTemplate;
+    }
+
+
+}
+```
+
+此时启动项目会报错，错误解释: **由于shiro中提供的simpleByteSource实现没有实现序列化,所有在认证时出现错误信息**
+
+解决方案: **需要自动salt实现序列化**
+
+- 实现 实体类 序列化（每个实体类implements Serializable）
+
+- **自定义salt实现 实现序列化接口**
+
+```java
+package com.sucker.springboot_jsp_shiro.utils;
+
+import org.apache.shiro.codec.Base64;
+import org.apache.shiro.codec.CodecSupport;
+import org.apache.shiro.codec.Hex;
+import org.apache.shiro.util.ByteSource;
+
+import java.io.File;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.util.Arrays;
+
+public class MyByteSource implements ByteSource,Serializable {
+    private byte[] bytes;
+    private String cachedHex;
+    private String cachedBase64;
+
+    public MyByteSource(){
+
+    }
+
+    public MyByteSource(byte[] bytes) {
+        this.bytes = bytes;
+    }
+
+    public MyByteSource(char[] chars) {
+        this.bytes = CodecSupport.toBytes(chars);
+    }
+
+    public MyByteSource(String string) {
+        this.bytes = CodecSupport.toBytes(string);
+    }
+
+    public MyByteSource(ByteSource source) {
+        this.bytes = source.getBytes();
+    }
+
+    public MyByteSource(File file) {
+        this.bytes = (new MyByteSource.BytesHelper()).getBytes(file);
+    }
+
+    public MyByteSource(InputStream stream) {
+        this.bytes = (new MyByteSource.BytesHelper()).getBytes(stream);
+    }
+
+    public static boolean isCompatible(Object o) {
+        return o instanceof byte[] || o instanceof char[] || o instanceof String || o instanceof ByteSource || o instanceof File || o instanceof InputStream;
+    }
+
+    public byte[] getBytes() {
+        return this.bytes;
+    }
+
+    public boolean isEmpty() {
+        return this.bytes == null || this.bytes.length == 0;
+    }
+
+    public String toHex() {
+        if (this.cachedHex == null) {
+            this.cachedHex = Hex.encodeToString(this.getBytes());
+        }
+
+        return this.cachedHex;
+    }
+
+    public String toBase64() {
+        if (this.cachedBase64 == null) {
+            this.cachedBase64 = Base64.encodeToString(this.getBytes());
+        }
+
+        return this.cachedBase64;
+    }
+
+    public String toString() {
+        return this.toBase64();
+    }
+
+    public int hashCode() {
+        return this.bytes != null && this.bytes.length != 0 ? Arrays.hashCode(this.bytes) : 0;
+    }
+
+    public boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        } else if (o instanceof ByteSource) {
+            ByteSource bs = (ByteSource)o;
+            return Arrays.equals(this.getBytes(), bs.getBytes());
+        } else {
+            return false;
+        }
+    }
+
+    private static final class BytesHelper extends CodecSupport {
+        private BytesHelper() {
+        }
+
+        public byte[] getBytes(File file) {
+            return this.toBytes(file);
+        }
+
+        public byte[] getBytes(InputStream stream) {
+            return this.toBytes(stream);
+        }
+    }
+}
+```
+
+修改自定义Realm中认证方法中的盐
+
+```java
+import java.util.List;
+
+//自定义Realm
+public class CustomerRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        System.out.println("=========================");
+        //先伪造数据库操作
+        //用户名
+        String principal = (String) authenticationToken.getPrincipal();
+
+        User user = userService.findByUserName(principal);
+        System.out.println(user.toString());
+
+        if(!ObjectUtils.isEmpty(user)){
+            //密码认证shiro做
+            return new SimpleAuthenticationInfo(user.getUsername(),user.getPassword(), new MyByteSource(user.getSalt()),this.getName());
+        }
+        return null;
+    }
+}
+```
+
+再次测试成功
+
+![image-20220325170235964](shiro讲义.assets/image-20220325170235964.png)
+
+完善自定义redis缓存
+
+```java
+package com.sucker.springboot_jsp_shiro.shiro.cache;
+
+import com.sucker.springboot_jsp_shiro.utils.ApplicationContextUtils;
+import org.apache.shiro.cache.Cache;
+import org.apache.shiro.cache.CacheException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+import java.util.Collection;
+import java.util.Set;
+
+//自定义redis缓存的实现，需要实现Cache接口
+public class RedisCache<k,v> implements Cache<k,v> {
+
+//    @Autowired
+//    private RedisTemplate redisTemplate;
+
+    private String cacheName;
+
+    public RedisCache(){ }
+
+    public RedisCache(String cacheName){this.cacheName = cacheName;}
+
+    @Override
+    public v get(k k) throws CacheException {
+        System.out.println("get key: "+k);
+        //redisTemplate默认是对对象进行操作的，而key是一个字符串，value才是一个对象
+        //所以把key的序列化方式改为String的序列化方式
+        return (v) getRedisTemplate().opsForHash().get(this.cacheName,k.toString());
+    }
+
+    @Override
+    public v put(k k, v v) throws CacheException {
+        System.out.println("put key: "+k);
+        System.out.println("put value: "+v);
+        //redisTemplate默认是对对象进行操作的，而key是一个字符串，value才是一个对象
+        //所以把key的序列化方式改为String的序列化方式
+        getRedisTemplate().opsForHash().put(this.cacheName,k.toString(),v);
+        return null;
+    }
+
+    @Override
+    public v remove(k k) throws CacheException {
+        return (v) getRedisTemplate().opsForHash().delete(this.cacheName,k.toString());
+    }
+
+    @Override
+    public void clear() throws CacheException {
+        getRedisTemplate().delete(this.cacheName);
+    }
+
+    @Override
+    public int size() {
+        return getRedisTemplate().opsForHash().size(this.cacheName).intValue();
+    }
+
+    @Override
+    public Set<k> keys() {
+        return getRedisTemplate().opsForHash().keys(this.cacheName);
+    }
+
+    @Override
+    public Collection<v> values() {
+        return getRedisTemplate().opsForHash().values(this.cacheName);
+    }
+
+    private RedisTemplate getRedisTemplate(){
+        RedisTemplate redisTemplate = (RedisTemplate) ApplicationContextUtils.getBean("redisTemplate");
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        //内部的Map中的String序列化
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+        return redisTemplate;
+    }
+
+
+}
+```
+
+### 加入验证码验证
+
+验证码工具类
+
+```java
+package com.sucker.springboot_jsp_shiro.utils;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Random;
+
+/**
+ *@创建人  cx
+ *@创建时间  2018/11/27 17:36
+ *@描述   验证码生成
+ */
+public class VerifyCodeUtils{
+
+    //使用到Algerian字体，系统里没有的话需要安装字体，字体只显示大写，去掉了1,0,i,o几个容易混淆的字符
+    public static final String VERIFY_CODES = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    private static Random random = new Random();
+
+
+    /**
+     * 使用系统默认字符源生成验证码
+     * @param verifySize    验证码长度
+     * @return
+     */
+    public static String generateVerifyCode(int verifySize){
+        return generateVerifyCode(verifySize, VERIFY_CODES);
+    }
+    /**
+     * 使用指定源生成验证码
+     * @param verifySize    验证码长度
+     * @param sources   验证码字符源
+     * @return
+     */
+    public static String generateVerifyCode(int verifySize, String sources){
+        if(sources == null || sources.length() == 0){
+            sources = VERIFY_CODES;
+        }
+        int codesLen = sources.length();
+        Random rand = new Random(System.currentTimeMillis());
+        StringBuilder verifyCode = new StringBuilder(verifySize);
+        for(int i = 0; i < verifySize; i++){
+            verifyCode.append(sources.charAt(rand.nextInt(codesLen-1)));
+        }
+        return verifyCode.toString();
+    }
+
+    /**
+     * 生成随机验证码文件,并返回验证码值
+     * @param w
+     * @param h
+     * @param outputFile
+     * @param verifySize
+     * @return
+     * @throws IOException
+     */
+    public static String outputVerifyImage(int w, int h, File outputFile, int verifySize) throws IOException{
+        String verifyCode = generateVerifyCode(verifySize);
+        outputImage(w, h, outputFile, verifyCode);
+        return verifyCode;
+    }
+
+    /**
+     * 输出随机验证码图片流,并返回验证码值
+     * @param w
+     * @param h
+     * @param os
+     * @param verifySize
+     * @return
+     * @throws IOException
+     */
+    public static String outputVerifyImage(int w, int h, OutputStream os, int verifySize) throws IOException{
+        String verifyCode = generateVerifyCode(verifySize);
+        outputImage(w, h, os, verifyCode);
+        return verifyCode;
+    }
+
+    /**
+     * 生成指定验证码图像文件
+     * @param w
+     * @param h
+     * @param outputFile
+     * @param code
+     * @throws IOException
+     */
+    public static void outputImage(int w, int h, File outputFile, String code) throws IOException{
+        if(outputFile == null){
+            return;
+        }
+        File dir = outputFile.getParentFile();
+        if(!dir.exists()){
+            dir.mkdirs();
+        }
+        try{
+            outputFile.createNewFile();
+            FileOutputStream fos = new FileOutputStream(outputFile);
+            outputImage(w, h, fos, code);
+            fos.close();
+        } catch(IOException e){
+            throw e;
+        }
+    }
+
+    /**
+     * 输出指定验证码图片流
+     * @param w
+     * @param h
+     * @param os
+     * @param code
+     * @throws IOException
+     */
+    public static void outputImage(int w, int h, OutputStream os, String code) throws IOException{
+        int verifySize = code.length();
+        BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Random rand = new Random();
+        Graphics2D g2 = image.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+        Color[] colors = new Color[5];
+        Color[] colorSpaces = new Color[] { Color.WHITE, Color.CYAN,
+                Color.GRAY, Color.LIGHT_GRAY, Color.MAGENTA, Color.ORANGE,
+                Color.PINK, Color.YELLOW };
+        float[] fractions = new float[colors.length];
+        for(int i = 0; i < colors.length; i++){
+            colors[i] = colorSpaces[rand.nextInt(colorSpaces.length)];
+            fractions[i] = rand.nextFloat();
+        }
+        Arrays.sort(fractions);
+
+        g2.setColor(Color.GRAY);// 设置边框色
+        g2.fillRect(0, 0, w, h);
+
+        Color c = getRandColor(200, 250);
+        g2.setColor(c);// 设置背景色
+        g2.fillRect(0, 2, w, h-4);
+
+        //绘制干扰线
+        Random random = new Random();
+        g2.setColor(getRandColor(160, 200));// 设置线条的颜色
+        for (int i = 0; i < 20; i++) {
+            int x = random.nextInt(w - 1);
+            int y = random.nextInt(h - 1);
+            int xl = random.nextInt(6) + 1;
+            int yl = random.nextInt(12) + 1;
+            g2.drawLine(x, y, x + xl + 40, y + yl + 20);
+        }
+
+        // 添加噪点
+        float yawpRate = 0.05f;// 噪声率
+        int area = (int) (yawpRate * w * h);
+        for (int i = 0; i < area; i++) {
+            int x = random.nextInt(w);
+            int y = random.nextInt(h);
+            int rgb = getRandomIntColor();
+            image.setRGB(x, y, rgb);
+        }
+
+        shear(g2, w, h, c);// 使图片扭曲
+
+        g2.setColor(getRandColor(100, 160));
+        int fontSize = h-4;
+        Font font = new Font("Algerian", Font.ITALIC, fontSize);
+        g2.setFont(font);
+        char[] chars = code.toCharArray();
+        for(int i = 0; i < verifySize; i++){
+            AffineTransform affine = new AffineTransform();
+            affine.setToRotation(Math.PI / 4 * rand.nextDouble() * (rand.nextBoolean() ? 1 : -1), (w / verifySize) * i + fontSize/2, h/2);
+            g2.setTransform(affine);
+            g2.drawChars(chars, i, 1, ((w-10) / verifySize) * i + 5, h/2 + fontSize/2 - 10);
+        }
+
+        g2.dispose();
+        ImageIO.write(image, "jpg", os);
+    }
+
+    private static Color getRandColor(int fc, int bc) {
+        if (fc > 255)
+            fc = 255;
+        if (bc > 255)
+            bc = 255;
+        int r = fc + random.nextInt(bc - fc);
+        int g = fc + random.nextInt(bc - fc);
+        int b = fc + random.nextInt(bc - fc);
+        return new Color(r, g, b);
+    }
+
+    private static int getRandomIntColor() {
+        int[] rgb = getRandomRgb();
+        int color = 0;
+        for (int c : rgb) {
+            color = color << 8;
+            color = color | c;
+        }
+        return color;
+    }
+
+    private static int[] getRandomRgb() {
+        int[] rgb = new int[3];
+        for (int i = 0; i < 3; i++) {
+            rgb[i] = random.nextInt(255);
+        }
+        return rgb;
+    }
+
+    private static void shear(Graphics g, int w1, int h1, Color color) {
+        shearX(g, w1, h1, color);
+        shearY(g, w1, h1, color);
+    }
+
+    private static void shearX(Graphics g, int w1, int h1, Color color) {
+
+        int period = random.nextInt(2);
+
+        boolean borderGap = true;
+        int frames = 1;
+        int phase = random.nextInt(2);
+
+        for (int i = 0; i < h1; i++) {
+            double d = (double) (period >> 1)
+                    * Math.sin((double) i / (double) period
+                    + (6.2831853071795862D * (double) phase)
+                    / (double) frames);
+            g.copyArea(0, i, w1, 1, (int) d, 0);
+            if (borderGap) {
+                g.setColor(color);
+                g.drawLine((int) d, i, 0, i);
+                g.drawLine((int) d + w1, i, w1, i);
+            }
+        }
+
+    }
+
+    private static void shearY(Graphics g, int w1, int h1, Color color) {
+
+        int period = random.nextInt(40) + 10; // 50;
+
+        boolean borderGap = true;
+        int frames = 20;
+        int phase = 7;
+        for (int i = 0; i < w1; i++) {
+            double d = (double) (period >> 1)
+                    * Math.sin((double) i / (double) period
+                    + (6.2831853071795862D * (double) phase)
+                    / (double) frames);
+            g.copyArea(i, 0, 1, h1, 0, (int) d);
+            if (borderGap) {
+                g.setColor(color);
+                g.drawLine(i, (int) d, i, 0);
+                g.drawLine(i, (int) d + h1, i, h1);
+            }
+
+        }
+
+    }
+    public static void main(String[] args) throws IOException {
+        //获取验证码
+        String s = generateVerifyCode(4);
+        //将验证码放入图片中
+        outputImage(260,60,new File("/Users/chenyannan/Desktop/安工资料/aa.jpg"),s);
+        System.out.println(s);
+    }
+}
+```
+
+登录页面加入验证码
+
+```jsp
+<%@page contentType="text/html;utf-8" pageEncoding="utf-8" isELIgnored="false" %>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <h1>登录界面</h1>
+    <form action="${pageContext.request.contextPath}/user/login" method="post">
+        用户名:<input type="text" name="username" > <br/>
+        密码  : <input type="text" name="password"> <br>
+        请输入验证码：<input type="test" name="code"><img src="${pageContext.request.contextPath}/user/getImageCode" alt=""> <br>
+        <input type="submit" value="登录">
+    </form>
+</body>
+</html>
+
+```
+
+验证码接口
+
+```java
+    /**
+     * 生成图片验证码，通过session取出验证
+     * @param session
+     */
+    @RequestMapping("getImageCode")
+    public void getImageCode(HttpSession session, HttpServletResponse response) throws Exception{
+        //生成验证码
+        String code = VerifyCodeUtils.generateVerifyCode(4);
+        //验证码放入session
+        session.setAttribute("code",code);
+        //验证码存入图片
+        ServletOutputStream os = response.getOutputStream();
+        response.setContentType("image/png");
+        VerifyCodeUtils.outputImage(220,60,os,code);
+    }
+```
+
+shiroConfig中放行验证码
+
+```java
+map.put("/user/getImageCode","anon");//验证码
+```
+
+修改认证流程（这里session有问题）
+
+```java
+@RequestMapping("login")
+    public String login(String username, String password,String code,HttpSession session) {
+        //比较验证码
+        String codes = (String) session.getAttribute("code");
+        try {
+            if (codes.equalsIgnoreCase(code)){
+                //获取主体对象
+                Subject subject = SecurityUtils.getSubject();
+                    subject.login(new UsernamePasswordToken(username, password));
+                    return "redirect:/index.jsp";
+            }else{
+                throw new RuntimeException("验证码错误!");
+            }
+        } catch (UnknownAccountException e) {
+            e.printStackTrace();
+            System.out.println("用户名错误!");
+        } catch (IncorrectCredentialsException e) {
+            e.printStackTrace();
+            System.out.println("密码错误!");
+        }catch (Exception e){
+            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
+        return "redirect:/login.jsp";
+    }
+```
+
+
+

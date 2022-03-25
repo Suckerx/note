@@ -352,9 +352,9 @@ Maven会规定好你该如何去编写我们的java代码，必须按照这个�
       <name>aliyun maven</name>
       <url>
       http://maven.aliyun.com/nexus/content/groups/public/
-  </url>
+   </url>
       <mirrorOf>central</mirrorOf>        
-      </mirror>
+  </mirror>
   ```
 
 ### 本地仓库
