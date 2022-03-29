@@ -2704,7 +2704,7 @@ docker pull mysql:5.7
 ```
 docker run  -p 6379:6379 --name myr3 --privileged=true -v /app/redis/redis.conf:/etc/redis/redis.conf -v /app/redis/data:/data -d redis:6.0.8 redis-server /etc/redis/redis.conf
 docker ps
-docker exec -it kmyr3 /bin/bash
+docker exec -it myr3 /bin/bash
 redis-cli
 set k1 v1
 get k1
