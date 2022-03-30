@@ -286,7 +286,7 @@ title 属性：提示文本
 <img src="../image.png" />
 ```
 
-## [7、音频标签](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_7、音频标签)
+## 7、音频标签
 
 ```html
 <audio
@@ -297,9 +297,9 @@ title 属性：提示文本
 </audio>
 ```
 
-支持的格式 mp3 wav
+支持的格式 mp3 wav Ogg
 
-## [8、视频标签](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_8、视频标签)
+## 8、视频标签
 
 ```html
 <video src="视频地址"
@@ -310,22 +310,28 @@ title 属性：提示文本
 </video>
 ```
 
-支持的格式 mp4
+支持的格式 mp4 、WebM、Ogg
 
-## [9、链接标签 Anchor](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_9、链接标签-anchor)
+## 9、链接标签 Anchor
 
 ```html
 <a href="目标地址">文字内容</a>
 
 <!-- eg: -->
 <a href="https://www.baidu.com/">百度</a>
+
+<!-- #表示不确定 -->
+<a href="#">百度</a>
 ```
 
-[百度](https://www.baidu.com/)
+[百度](https://www.baidu.com/) 
 
 属性：
 
-- target: _self 当前窗口打开（默认） / _blank 新窗口打开
+- href ： 跳转地址
+
+- target: 目标网页的打开形式
+  - _self 当前窗口打开（默认） / _blank 新窗口打开
 
 Tips: chrome 地址栏双击可以看到完整地址
 
