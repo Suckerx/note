@@ -347,6 +347,10 @@ Tips: chrome 地址栏双击可以看到完整地址
 
 列表项 List Item
 
+ul中只能有 <li>
+
+li标签可以包含任意内容
+
 ```html
 <ul>
   <li>苹果</li>
@@ -355,9 +359,15 @@ Tips: chrome 地址栏双击可以看到完整地址
 </ul>
 ```
 
-苹果香蕉桃子
+- 苹果
+- 香蕉
+- 桃子
 
 （2）有序列表 Ordered List
+
+ol中只能有 <li>
+
+li标签可以包含任意内容
 
 ```html
 <ol>
@@ -367,7 +377,9 @@ Tips: chrome 地址栏双击可以看到完整地址
 </ol>
 ```
 
-苹果香蕉桃子
+1. 苹果
+2. 香蕉
+3. 桃子
 
 （3）自定义列表 Description List
 
@@ -380,12 +392,17 @@ Tips: chrome 地址栏双击可以看到完整地址
 </dl>
 ```
 
-水果苹果香蕉桃子
+![image-20220410223337311](html.assets/image-20220410223337311.png)
 
-标签含义
+水果
 
-- dt Description Term
-- dd Description Details
+​	苹果 
+
+​	香蕉
+
+​	桃子
+
+dl只能放dt/dd，dt/dd中可以任意
 
 ## [11、表格](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_11、表格)
 
@@ -393,9 +410,7 @@ Tips: chrome 地址栏双击可以看到完整地址
 
 标签含义
 
-- tr Table Row
-- th Table Header
-- td Table Data
+- ![image-20220410223713807](html.assets/image-20220410223713807.png)
 
 table 属性：
 
