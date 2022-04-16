@@ -417,11 +417,13 @@ table 属性：
 - border 边框宽度
 - width 表格宽度
 - height 表格高度
+- caption  表格大标题，表示表格整体大标题，默认在表格整体顶部剧中
+- th  表头单元格  表头一列小标题，通常于表格第一行，默认内部文字加粗并居中
 
 ```html
 <table border="1">
     <caption>
-        表格大标题
+        <strong>表格大标题</strong> #或者加h1 h3这种
     </caption>
     
     <tr>
@@ -446,6 +448,11 @@ table 属性：
 - thead 表格头部
 - tbody 表格主体
 - tfoot 表格底部
+
+注意点：
+
+- 表格结构标签内部用于包裹 tr 标签
+- 结构标签可以省略
 
 ```html
 <table border="1">
@@ -484,8 +491,8 @@ table 属性：
 
 （3）合并单元格
 
-- 跨行合并（垂直）rowspan
-- 跨列合并（水平）colspan
+- 跨行合并（垂直）rowspan，属性是合并单元格的个数
+- 跨列合并（水平）colspan，属性是合并单元格的个数
 
 左上原则
 
@@ -529,7 +536,7 @@ table 属性：
 
 ## [12、表单](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_12、表单)
 
-输入框 input
+输入框 input，可以通过 type 属性值的不同，展示不同效果
 
 | type 属性 | 输入框类型 |
 | --------- | ---------- |
@@ -544,7 +551,7 @@ table 属性：
 
 （1）text 文本框
 
-placeholder 占位符
+placeholder 占位符，提示用户输入内容的文本
 
 ```html
 <input type="text" placeholder="文本框占位符" />
@@ -554,7 +561,7 @@ placeholder 占位符
 
 （2）password 密码框
 
-placeholder 占位符
+placeholder 占位符，提示用户输入内容的文本
 
 ```html
 <input type="password" placeholder="密码框占位符" />
@@ -569,7 +576,7 @@ name 属性分组，一个分组只能有一个值被选中
 checked 默认选中
 
 ```html
-<input type="radio" name="sex" value="1" />男
+性别：<input type="radio" name="sex" value="1" />男
 <input type="radio" name="sex" value="2" checked />女
 ```
 
