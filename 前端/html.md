@@ -404,7 +404,7 @@ li标签可以包含任意内容
 
 dl只能放dt/dd，dt/dd中可以任意
 
-## [11、表格](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=_11、表格)
+## 11、表格
 
 （1）基本元素
 
@@ -607,7 +607,7 @@ multiple 多选(按住 ctrl 多选)
 
 - submit 提交按钮
 - reset 重置按钮
-- button 普通按钮
+- button 普通按钮，默认无功能
 
 需要配合 form 表单域使用
 
@@ -638,7 +638,11 @@ type 取值
 
 提交按钮 重置按钮 普通按钮 普通按钮
 
-## [select 下拉菜单](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=select-下拉菜单)
+谷歌浏览器中button默认是提交按钮
+
+button 标签是双标签，更便于包裹其他内容：文字、图片等
+
+## select 下拉菜单
 
 ```html
 <select>
@@ -653,9 +657,9 @@ type 取值
 
 option 选项
 
-默认选中第一项，可以指定默认选中 selected
+默认选中第一项，可以指定默认选中 `selected`
 
-## [textarea 多行文本域](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=textarea-多行文本域)
+## textarea 多行文本域
 
 属性
 
@@ -663,16 +667,20 @@ option 选项
 - rows 高度 行数
 
 ```html
-<textarea></textarea>
+<textarea name="" id="" cols="30" rows="10"></textarea>
 ```
 
+注意点：右下角可以拖拽改变大小
 
+实际开发的时候针对于样式效果推荐用css设置
 
-## [label 标签](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=label-标签)
+## label 标签
 
 点击文字也可选中选项
 
 两种使用方式等效
+
+![image-20220417212613498](html.assets/image-20220417212613498.png)
 
 ```html
 <input type="radio" name="sex" id="man" />
@@ -683,12 +691,12 @@ option 选项
 
  男 女
 
-## [无语义标签](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=无语义标签)
+## 无语义标签
 
 - div 块级标签，独占一行
-- span 行内标签
+- span 行内标签，写在一行内
 
-## [语义化标签](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=语义化标签)
+## 语义化标签
 
 手机端常用
 
@@ -701,16 +709,18 @@ option 选项
 
 以上标签和 div 等效，多了语义化
 
-## [字符实体](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=字符实体)
+## 字符实体
 
 在网页中显示特殊字符
 
 - 空格 ` `
 - 版权符 `©`
 
+![image-20220417214500083](html.assets/image-20220417214500083.png)
+
 ```html
 <!-- 单词之间有5个空格，最后只显示一个空格 -->
-hello world
+hello     world
 
 <!-- 实现单词之间有5个空格 -->
 hello&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;world
@@ -721,67 +731,128 @@ hello&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;world
 
 hello world
 
-hello   world
+hello     world
 
 ©
 
-## [综合案例](https://mouday.github.io/coding-tree/#/blog/front-end-learn/html-element?id=综合案例)
+## 综合案例
+
+1. 学生信息表
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible"
-          content="IE=edge">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-    <title>Form Demo</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
 </head>
-
 <body>
-    <h2>个人信息</h2>
-    <form action="">
-        <p>姓名:
-            <input type="text"
-                   placeholder="姓名">
-        </p>
-        <p>性别:
-            <label><input type="radio"
-                       name="sex"
-                       checked>男</label>
-            <label><input type="radio"
-                       name="sex">女</label>
-        </p>
-        <p>爱好:
-            <label><input type="checkbox"
-                       checked>足球</label>
-            <label><input type="checkbox">篮球</label>
-            <label><input type="checkbox">羽毛球</label>
-        </p>
+    
 
-        <p>现居：<select>
-                <option value="">北京</option>
-                <option value="">上海</option>
-                <option value="">广州</option>
-                <option value="">深圳</option>
-            </select>
-        </p>
+    <table border="1" width="500" height="300">
+        <!-- 表格标题 -->
+        <caption><h3>优秀学生信息表格</h3></caption>
+        <tr>
+            <!-- 表头单元格  表头一列小标题 -->
+            <th>年级</th>
+            <th>姓名</th>
+            <th>学号</th>
+            <th>班级</th></th>
+        </tr>
 
-        <p>个人简介：
-            <br />
-            <textarea cols="60"
-                      rows="10"></textarea>
-        </p>
+        <tr>
+            <!-- 表格单元格 -->
+            <td rowspan="2">高三</td>
+            <td>迪丽热巴</td>
+            <td>110</td>
+            <td>三年二班</td>
+        </tr>
 
-        <input type="submit"
-               value="提交">
-        <button type="reset">重置</button>
-    </form>
+        <tr>
+            <!-- 表格单元格 -->
+            <td>古力娜扎</td>
+            <td>120</td>
+            <td>三年三班</td>
+        </tr>
+
+        <tr>
+            <!-- 表格单元格 -->
+            <td>评于</td>
+            <!-- 三个合并一起 -->
+            <td colspan="3">你们很优秀</td>
+        </tr>
+
+
+
+    </table>
+
+
+
 </body>
-
 </html>
 ```
 
-<iframe src="https://mouday.github.io/coding-tree/blog/front-end-learn/demo/form-1.html" height="470" style="-webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; text-size-adjust: none; box-sizing: border-box; border: 1px solid rgb(238, 238, 238); width: 1px; min-width: 100%; margin: 1em 0px; color: rgb(52, 73, 94); font-family: &quot;Source Sans Pro&quot;, &quot;Helvetica Neue&quot;, Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"></iframe>
+2. 表单
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    
+    <h1>青春不常在，抓紧谈恋爱</h1>
+    <!-- 分割线 -->
+    <hr> 
+    <form action="">
+        昵称：<input type="text" placeholder="请输入昵称">
+        <br>
+        <br>
+        性别：
+        <label><input type="radio" name="sex"> 男</label>
+        <label><input type="radio" name="sex" checked> 女</label>
+
+        <br> <br>
+        <select>
+            <option value="">北京</option>
+            <option value="" selected>上海</option>
+            <option value="">广州</option>
+        </select>
+        <br><br>
+
+        喜欢的类型：
+        <label><input type="checkbox" checked> 可爱</label>
+        <label><input type="checkbox" checked> 性感</label>
+        <label><input type="checkbox" name="" id="">御姐</label>
+
+        <br><br>
+
+        个人介绍：
+        <textarea name="" id="" cols="60" rows="10"></textarea>
+
+        <h3>我承诺</h3>
+        <ul>
+            <li>年满18、单身</li>
+            <li>年满18、单身</li>
+            <li>年满18、单身</li>
+            <li>年满18、单身</li>
+        </ul>
+
+        <!-- 按钮：input button -->
+        <input type="submit" value="免费注册">
+        <button type="reset">重置</button>
+
+
+    </form>
+</body>
+</html>
+```
+
+![image-20220417222350828](html.assets/image-20220417222350828.png)
+
