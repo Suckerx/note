@@ -2706,6 +2706,7 @@ docker run  -p 6379:6379 --name myr3 --privileged=true -v /app/redis/redis.conf:
 docker ps
 docker exec -it myr3 /bin/bash
 redis-cli
+auth r
 set k1 v1
 get k1
 ping

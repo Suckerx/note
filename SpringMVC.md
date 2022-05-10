@@ -3314,10 +3314,8 @@ jQuery.ajax(...)
        }
    }
    
-   
-   12345678910111213141516171819202122232425262728
    ```
-
+   
 4. 在springmvc的配置文件中配置拦截器
 
    ```xml
@@ -3330,10 +3328,8 @@ jQuery.ajax(...)
        </mvc:interceptor>
    
    </mvc:interceptors>
-   
-   12345678910
    ```
-
+   
 5. 编写一个Controller，接收请求
 
    ```java
@@ -3350,10 +3346,8 @@ jQuery.ajax(...)
            return "ok";
        }
    }
-   
-   1234567891011121314
    ```
-
+   
 6. 启动tomcat 测试一下！(http://localhost:8888/t1)
 
 ### 验证用户是否登录 (认证用户)
@@ -3385,11 +3379,8 @@ jQuery.ajax(...)
    </form>
    </body>
    </html>
-   
-   
-   123456789101112131415161718
    ```
-
+   
 2. 编写一个Controller处理请求
 
    ```java
