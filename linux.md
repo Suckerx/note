@@ -438,3 +438,45 @@ vim /etc/hosts
 
 ### Linux服务管理
 
+- Linux中的进程和服务
+
+  计算机中,一个正在执行的程序或命令,被叫作 进程(process)
+
+  启动之后一直存在,常驻内存的进程,一般被称作 服务(service)
+
+### systemctl
+
+在 Centos 6的版本中,使用的是 service xxx xxx
+
+在Centos 7版本也可以兼容,但是推荐使用 systemctl
+
+![1657967888658](linux.assets/1657967888658.png)
+
+![1657967898783](linux.assets/1657967898783.png)
+
+```
+ls /usr/lib/systemd
+查看
+systemctl restart network
+```
+
+### 系统运行级别
+
+- 在Centos6中运行级别
+
+![1657968630774](linux.assets/1657968630774.png)
+
+不同运行级别区别就在于启动时所启动的服务
+
+- 在Centos7 中
+
+![1657968979555](linux.assets/1657968979555.png)
+
+![1657969027733](linux.assets/1657969027733.png)
+
+```
+init 3 切换到运行级别3
+```
+
+
+
