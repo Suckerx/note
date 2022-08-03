@@ -2710,6 +2710,10 @@ auth r
 set k1 v1
 get k1
 ping
+
+删除容器先停止再删除
+docker stop myr3
+docker rm myr3
 ```
 
 这一步创建容器的时候，可能出错，名字已经被一个容器占用，可以使用以下命令删除对应的容器
