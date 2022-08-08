@@ -1032,3 +1032,444 @@ AOF的方式也同时带来了另一个问题。持久化文件会变的越来�
 
 ------
 
+## 5. java操作Redis
+
+ ![在这里插入图片描述](redis.assets/20201206194120350.png) 
+
+ ![在这里插入图片描述](redis.assets/20201206200054345.png) 
+
+### 5.1 环境准备
+
+#### 1. 引入依赖
+
+```markdown
+<!--引入jedis连接依赖-->
+<dependency>
+  <groupId>redis.clients</groupId>
+  <artifactId>jedis</artifactId>
+  <version>2.9.0</version>
+</dependency>
+```
+
+#### 2.创建jedis对象
+
+```java
+ public static void main(String[] args) {
+   //1.创建jedis对象
+   Jedis jedis = new Jedis("192.168.40.4", 6379);//1.redis服务必须关闭防火墙  2.redis服务必须开启远程连接
+   jedis.select(0);//选择操作的库默认0号库  不写就默认0号库
+   //2.执行相关操作
+   //....
+   //3.释放资源
+   jedis.close();
+ }
+```
+
+ ![在这里插入图片描述](redis.assets/20201206191958703.png) 
+
+### 5.2 操作key相关API
+
+ ![在这里插入图片描述](redis.assets/20201206213410483.png) 
+
+```java
+private Jedis jedis;
+    @Before
+    public void before(){
+        this.jedis = new Jedis("192.168.202.205", 7000);
+    }
+    @After
+    public void after(){
+        jedis.close();
+    }
+
+    //测试key相关
+    @Test
+    public void testKeys(){
+        //删除一个key
+        jedis.del("name");
+        //删除多个key
+        jedis.del("name","age");
+
+        //判断一个key是否存在exits
+        Boolean name = jedis.exists("name");
+        System.out.println(name);
+
+        //设置一个key超时时间 expire pexpire
+        Long age = jedis.expire("age", 100);
+        System.out.println(age);
+
+        //获取一个key超时时间 ttl
+        Long age1 = jedis.ttl("newage");
+        System.out.println(age1);
+
+        //随机获取一个key
+        String s = jedis.randomKey();
+
+        //修改key名称
+        jedis.rename("age","newage");
+
+        //查看可以对应值的类型
+        String name1 = jedis.type("name");
+        System.out.println(name1);
+        String maps = jedis.type("maps");
+        System.out.println(maps);
+    }
+```
+
+ ![在这里插入图片描述](redis.assets/20201206191905705.png) 
+
+### 5.3操作String相关API
+
+```java
+//测试String相关
+    @Test
+    public void testString(){
+        //set
+        jedis.set("name","小陈");
+        //get
+        String s = jedis.get("name");
+        System.out.println(s);
+        //mset
+        jedis.mset("content","好人","address","海淀区");
+        //mget
+        List<String> mget = jedis.mget("name", "content", "address");
+        mget.forEach(v-> System.out.println("v = " + v));
+        //getset
+        String set = jedis.getSet("name", "小明");
+        System.out.println(set);
+
+        //............
+    }
+```
+
+### 5.4操作List相关API
+
+```java
+//测试List相关
+    @Test
+    public void testList(){
+
+        //lpush
+        jedis.lpush("names1","张三","王五","赵柳","win7");
+
+        //rpush
+        jedis.rpush("names1","xiaomingming");
+
+        //lrange
+
+        List<String> names1 = jedis.lrange("names1", 0, -1);
+        names1.forEach(name-> System.out.println("name = " + name));
+
+        //lpop rpop
+        String names11 = jedis.lpop("names1");
+        System.out.println(names11);
+
+        //llen
+        jedis.linsert("lists", BinaryClient.LIST_POSITION.BEFORE,"xiaohei","xiaobai");
+
+      	//........
+
+    }
+
+```
+
+### 5.5操作Set的相关API
+
+```java
+//测试SET相关
+@Test
+public void testSet(){
+
+  //sadd
+  jedis.sadd("names","zhangsan","lisi");
+
+  //smembers
+  jedis.smembers("names");
+
+  //sismember
+  jedis.sismember("names","xiaochen");
+
+  //...
+}
+```
+
+### 5.6 操作ZSet相关API
+
+```java
+//测试ZSET相关
+@Test
+public void testZset(){
+
+  //zadd
+  jedis.zadd("names",10,"张三");
+
+  //zrange
+  jedis.zrange("names",0,-1);
+
+  //zcard
+  jedis.zcard("names");
+
+  //zrangeByScore
+  jedis.zrangeByScore("names","0","100",0,5);
+
+  //..
+
+}
+```
+
+### 5.7 操作Hash相关API
+
+```java
+//测试HASH相关
+@Test
+public void testHash(){
+  //hset
+  jedis.hset("maps","name","zhangsan");
+  //hget
+  jedis.hget("maps","name");
+  //hgetall
+  jedis.hgetAll("mps");
+  //hkeys
+  jedis.hkeys("maps");
+  //hvals
+  jedis.hvals("maps");
+  //....
+}
+
+```
+
+## 6.SpringBoot整合Redis
+
+ Spring Boot Data(数据) Redis 中提供了**RedisTemplate和StringRedisTemplate** ，其中StringRedisTemplate是RedisTemplate的子类，两个方法基本一致，不同之处主要体现在操作的数据类型不同， **RedisTemplate中的两个泛型都是Object，意味着存储的key和value都可以是一个对象，而StringRedisTemplate的两个泛型都是String，意味着StringRedisTemplate的key和value都只能是字符串** 。
+
+**注意: 使用RedisTemplate默认是将对象序列化到Redis中,所以放入的对象必须实现对象序列化接口**
+
+### 6.1 环境准备
+
+![1659944834840](redis.assets/1659944834840.png)
+
+![1659944898329](redis.assets/1659944898329.png)
+
+![1659945145462](redis.assets/1659945145462.png)
+
+#### 1.引入依赖
+
+```java
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+
+#### 2.配置application.propertie
+
+```properties
+server.port=8989
+
+spring.redis.host=192.168.208.100
+spring.redis.port=6379
+spring.redis.database=0
+```
+
+### 6.2 使用StringRedisTemplate和RedisTemplate
+
+创建一个测试类 TestStringRedisTemplate
+
+使用这个注解相当于启动SpringBoot
+
+![1659945687439](redis.assets/1659945687439.png)
+
+连接可能出现超时，可能是防火墙未关闭，或者直接打开6379端口，还需要修改配置文件
+
+![1659946926362](redis.assets/1659946926362.png)
+
+ 如果设置为yes，那么只允许我们在本机的回环连接，其他机器无法连接。 注意重启redis
+
+```java
+	@Autowired
+    private StringRedisTemplate stringRedisTemplate;  //对字符串支持比较友好,不能存储对象
+    @Autowired
+    private RedisTemplate redisTemplate;  //存储对象
+
+    @Test
+    public void testRedisTemplate(){
+        System.out.println(redisTemplate);
+        //设置redistemplate值使用对象序列化策略
+        redisTemplate.setValueSerializer(new JdkSerializationRedisSerializer());//指定值使用对象序列化
+        //redisTemplate.opsForValue().set("user",new User("21","小黑",23,new Date()));
+        User user = (User) redisTemplate.opsForValue().get("user");
+        System.out.println(user);
+//      Set keys = redisTemplate.keys("*");
+//      keys.forEach(key -> System.out.println(key));
+        /*Object name = redisTemplate.opsForValue().get("name");
+        System.out.println(name);*/
+
+        //Object xiaohei = redisTemplate.opsForValue().get("xiaohei");
+        //System.out.println(xiaohei);
+        /*redisTemplate.opsForValue().set("name","xxxx");
+        Object name = redisTemplate.opsForValue().get("name");
+        System.out.println(name);*/
+        /*redisTemplate.opsForList().leftPushAll("lists","xxxx","1111");
+        List lists = redisTemplate.opsForList().range("lists", 0, -1);
+        lists.forEach(list-> System.out.println(list));*/
+    }
+
+
+    //key的绑定操作 如果日后对某一个key的操作及其频繁,可以将这个key绑定到对应redistemplate中,日后基于绑定操作都是操作这个key
+    //boundValueOps 用来对String值绑定key
+    //boundListOps 用来对List值绑定key
+    //boundSetOps 用来对Set值绑定key
+    //boundZsetOps 用来对Zset值绑定key
+    //boundHashOps 用来对Hash值绑定key
+
+//两个 template 都可以使用
+    @Test
+    public void testBoundKey(){
+        BoundValueOperations<String, String> nameValueOperations = stringRedisTemplate.boundValueOps("name");
+        nameValueOperations.set("1");
+        //yuew
+        nameValueOperations.set("2");
+        String s = nameValueOperations.get();
+        System.out.println(s);
+
+    }
+
+
+    //hash相关操作 opsForHash
+    @Test
+    public void testHash(){
+        stringRedisTemplate.opsForHash().put("maps","name","小黑");
+        Object o = stringRedisTemplate.opsForHash().get("maps", "name");
+        System.out.println(o);
+    }
+
+    //zset相关操作 opsForZSet
+    @Test
+    public void testZSet(){
+        stringRedisTemplate.opsForZSet().add("zsets","小黑",10);
+        Set<String> zsets = stringRedisTemplate.opsForZSet().range("zsets", 0, -1);
+        zsets.forEach(value-> System.out.println(value));
+
+        Set<ZSetOperations.TypedTuple<String>> zsets1 = stringRedisTemplate.opsForZSet().rangeByScoreWithScores("zsets", 0, 1000);
+
+        zsets1.forEach(typedTuple -> {
+            System.out.println(typedTuple.getValue());
+            System.out.println(typedTuple.getScore());
+        });
+
+    }
+
+    //set相关操作 opsForSet
+    @Test
+    public void testSet(){
+        stringRedisTemplate.opsForSet().add("sets","xiaosan","xiaosi","xiaowu");
+        Set<String> sets = stringRedisTemplate.opsForSet().members("sets");
+        sets.forEach(value-> System.out.println(value));
+    }
+
+    //list相关的操作opsForList
+    @Test
+    public void testList(){
+        //stringRedisTemplate.opsForList().leftPushAll("lists","张三","李四","王五");
+//        List<String> names = new ArrayList<>();
+//        names.add("12313");
+//        stringRedisTemplate.opsForList().leftPushAll("names",names);  //创建一个列表，放入多个元素
+        List<String> lists = stringRedisTemplate.opsForList().range("lists", 0, -1);//遍历
+        lists.forEach(key -> System.out.println(key));
+    }
+
+
+    //String相关的操作 opsForValue  表示操作String类型
+    @Test
+    public void testString(){
+        //stringRedisTemplate.opsForValue().set("166","好同学");
+        String s = stringRedisTemplate.opsForValue().get("166");
+        System.out.println(s);
+        Long size = stringRedisTemplate.opsForValue().size("166");
+        System.out.println(size);
+    }
+
+
+    //key相关的操作
+    @Test
+    public void test(){
+        Set<String> keys = stringRedisTemplate.keys("*");//查看所有key
+        Boolean name = stringRedisTemplate.hasKey("name");//判断某个key是否存在
+        stringRedisTemplate.delete("age");//根据指定key删除
+        stringRedisTemplate.rename("","");//修改key的名称
+        stringRedisTemplate.expire("key",10, TimeUnit.HOURS);
+      	//设置key超时时间 参数1:设置key名 参数2:时间 参数3:时间的单位
+        stringRedisTemplate.move("",1);//移动key
+    }
+
+```
+
+操作key
+
+![1659947226528](redis.assets/1659947226528.png)
+
+![1659947569445](redis.assets/1659947569445.png)
+
+操作RedisTemplate 创建一个实体类
+
+```java
+package com.sucker.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.experimental.Accessors;
+
+import java.io.Serializable;
+import java.util.Date;
+
+@Data
+@Accessors(chain = true)
+@AllArgsConstructor
+public class User implements Serializable { //要实现序列化
+
+    private String id;
+    private String name;
+    private Integer age;
+    private Date bir;
+
+}
+```
+
+操作RedisTemplate
+
+```java
+    @Test
+    public void testRedisTemplate(){
+
+        /**
+         * redisTemplate对象中 key 和value 的序列化都是 JdkSerializationRedisSerializer
+         * 但是我们希望的是 key ：String  value ： object
+         * 因此需要修改key的序列化方案
+         */
+
+        System.out.println(redisTemplate);
+        //设置redistemplate值使用对象序列化策略
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        //修改hash key 序列化方案
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+
+        redisTemplate.opsForValue().set("user",new User("21","小黑",23,new Date()));
+        User user = (User) redisTemplate.opsForValue().get("user");
+        System.out.println(user);
+
+        redisTemplate.opsForList().leftPush("list",user);
+
+        redisTemplate.opsForSet().add("set",user);
+
+        redisTemplate.opsForZSet().add("zset",user,10);
+
+        redisTemplate.opsForHash().put("map","name",user);
+
+
+    }
+```
+
+小总结
+
+![1659955011216](redis.assets/1659955011216.png)
+
