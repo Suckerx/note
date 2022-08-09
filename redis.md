@@ -1473,3 +1473,398 @@ public class User implements Serializable { //要实现序列化
 
 ![1659955011216](redis.assets/1659955011216.png)
 
+## 7. redis应用场景
+
+1. 利用 redis 中字符串类型完成项目中 手机验证码 存储的实现
+2. 利用 redis 中字符串类型完成 具有失效性业务功能  淘宝  订单还有：40分钟
+3. 利用 redis 分布式集群系统中  Session共享  
+4. 利用 redis zset类型  可排序set类型  元素对应分数可以完成  排行榜之类的功能   例如 sales(zset)  (商品id，销量)
+5. 利用 redis 完成 分布式缓存
+6. 利用 redis  存储认证后的 token 信息   例如微信小程序、公众号 获取用户  openid  生成令牌  会超时
+7. 利用 redis  解决分布式集群系统中分布式锁问题
+
+## 8. redis中分布式缓存实现
+
+**这里使用的是基于mybatis的缓存**
+
+![1660026490843](redis.assets/1660026490843.png)
+
+![1660026735136](redis.assets/1660026735136.png)
+
+![1660027258681](redis.assets/1660027258681.png)
+
+开启本地缓存后，第二次查询就会在缓存中查找到，就不会再查询数据库，但是这是放在当前服务器的内存中，在分布式集群中不能做到共享
+
+所以使用redis解决
+
+![1660027449800](redis.assets/1660027449800.png)
+
+### 8.1 redis分布式缓存实现
+
+![1660031452844](redis.assets/1660031452844.png)
+
+引入依赖
+
+```xml
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>2.2.2</version>
+        </dependency>
+```
+
+配合mapper使用mybatis
+
+![1660031621474](redis.assets/1660031621474.png)
+
+**因为这个类不是由工厂实例化，所以不能直接注入 redisTemplate，因此想要得到redisTemplate要通过工厂类中的getbean方法，因此需要一个工具类来获取工厂类**
+
+```java
+package com.sucker.cache;
+
+import com.sucker.util.ApplicationContextUtils;
+import org.apache.ibatis.cache.Cache;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+public class RedisCache implements Cache {
+
+    //当前放入缓存的mapper文件的 namespace
+    private final String id;
+
+    //必须存在构造方法
+    public RedisCache(String id){
+        this.id = id;
+    }
+
+    //返回cache唯一标识
+    @Override
+    public String getId() {
+        return this.id;
+    }
+
+    //缓存放入值
+    @Override
+    public void putObject(Object o, Object o1) {// o 就是key  o1 是value
+        //使用 redis 中 hash 类型作为缓存存储类型 key  hashkey  value
+        getRedisTemplate().opsForHash().put(id.toString(),o.toString(),o1.toString());
+
+    }
+
+    //获取缓存数据
+    @Override
+    public Object getObject(Object o) {
+        //根据key 从redis中的hash类型中获取数据
+        return getRedisTemplate().opsForHash().get(id.toString(),o.toString());
+    }
+
+
+    //mybatis保留方法  默认没有实现  后续版本可能实现
+    @Override
+    public Object removeObject(Object o) {
+        return null;
+    }
+
+
+    //默认增删改要走这个方法清空缓存
+    @Override
+    public void clear() {
+        //清空namespace
+        getRedisTemplate().delete(id.toString());
+    }
+
+    //用于计算数量
+    @Override
+    public int getSize() {
+        //获取hash中的 key value数量
+        return getRedisTemplate().opsForHash().size(id.toString()).intValue();
+    }
+
+    private RedisTemplate getRedisTemplate(){
+        //获取 redisTemplate
+        RedisTemplate redisTemplate = (RedisTemplate) ApplicationContextUtils.getBean("redisTemplate");
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+
+        return redisTemplate;
+    }
+
+}
+```
+
+工具类
+
+```java
+package com.sucker.util;
+
+import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.stereotype.Component;
+
+//用于获取SpringBoot创建好的工厂
+//交给Spring管理
+@Component
+public class ApplicationContextUtils implements ApplicationContextAware {
+
+    private static ApplicationContext applicationContext;
+
+    //将创建好的工厂以参数形式传递给你
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
+    }
+
+    //提供在工厂中获取对象的方法
+    public static Object getBean(String beanName){
+        return applicationContext.getBean(beanName);
+    }
+
+}
+```
+
+### 8.2 redis分布式缓存二
+
+一个模块的增删改会清空redis缓存对应的hash键，但是不能清除另外的，这就会引出问题：关联表的问题
+
+解决方法：**共享缓存：将有关联的表对应的缓存存放在一起，此时不管哪边进行增删改，都会清空缓存**
+
+![1660033068485](redis.assets/1660033068485.png)
+
+![1660033107070](redis.assets/1660033107070.png)
+
+### 8.3 redis分布式缓存三
+
+![1660034181805](redis.assets/1660034181805.png)
+
+优化处理，将key进行md5处理
+
+```java
+    @Test
+    public void testmd5(){
+
+        String key = "235u1098ufihaiuodfjioaj8092uq509q809fjioawidfhiqhj84t53q509u091u09uut9iuahf.;'l;kh";
+
+        //利用spring框架中提供的md5工具类   asHex表示转为16进制
+        String s = DigestUtils.md5DigestAsHex(key.getBytes());
+        System.out.println(s);
+
+    }
+```
+
+在redisCache中，封装一个方法，对key进行md5处理，在放入缓存的方法中，对key进行处理
+
+```java
+package com.sucker.cache;
+
+import com.sucker.util.ApplicationContextUtils;
+import org.apache.ibatis.cache.Cache;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.util.DigestUtils;
+
+public class RedisCache implements Cache {
+
+    //当前放入缓存的mapper文件的 namespace
+    private final String id;
+
+    //必须存在构造方法
+    public RedisCache(String id){
+        this.id = id;
+    }
+
+    //返回cache唯一标识
+    @Override
+    public String getId() {
+        return this.id;
+    }
+
+    //缓存放入值
+    @Override
+    public void putObject(Object o, Object o1) {// o 就是key  o1 是value
+        //使用 redis 中 hash 类型作为缓存存储类型 key  hashkey  value
+        getRedisTemplate().opsForHash().put(id.toString(),getKeyToMd5(o.toString()),o1.toString());
+
+    }
+
+    //获取缓存数据
+    @Override
+    public Object getObject(Object o) {
+        //根据key 从redis中的hash类型中获取数据
+        return getRedisTemplate().opsForHash().get(id.toString(),getKeyToMd5(o.toString()));
+    }
+
+
+    //mybatis保留方法  默认没有实现  后续版本可能实现
+    @Override
+    public Object removeObject(Object o) {
+        return null;
+    }
+
+
+    //默认增删改要走这个方法清空缓存
+    @Override
+    public void clear() {
+        //清空namespace
+        getRedisTemplate().delete(id.toString());
+    }
+
+    //用于计算数量
+    @Override
+    public int getSize() {
+        //获取hash中的 key value数量
+        return getRedisTemplate().opsForHash().size(id.toString()).intValue();
+    }
+
+    //封装redisTemplate
+    private RedisTemplate getRedisTemplate(){
+        //获取 redisTemplate
+        RedisTemplate redisTemplate = (RedisTemplate) ApplicationContextUtils.getBean("redisTemplate");
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+
+        return redisTemplate;
+    }
+
+    //封装一个对key进行md5处理方法
+    private String getKeyToMd5(String key){
+        return DigestUtils.md5DigestAsHex(key.getBytes());
+    }
+
+
+}
+```
+
+### 8.4 面试相关概念
+
+![1660035090759](redis.assets/1660035090759.png)
+
+![1660035707966](redis.assets/1660035707966.png)
+
+![1660035746142](redis.assets/1660035746142.png)
+
+## 9. Redis 主从复制
+
+### 9.1 主从复制
+
+主从复制架构仅仅用来解决数据的冗余备份,从节点仅仅用来同步数据
+
+**无法解决: 1.master节点出现故障的自动故障转移**
+
+### 9.2 主从复制架构图
+
+ ![在这里插入图片描述](redis.assets/20201210000540761.png) 
+
+### 9.3 搭建主从复制
+
+在一个服务器上，修改3个配置文件，启动3个不同端口的redis服务
+
+![1660037683012](redis.assets/1660037683012.png)
+
+拷贝原始配置文件3份
+
+![1660037755178](redis.assets/1660037755178.png)
+
+![1660038268069](redis.assets/1660038268069.png)
+
+
+
+```markdown
+# 1.准备3台机器并修改配置
+- master
+	port 6379
+	bind 0.0.0.0  #开启远程连接
+	protected-mode no
+	
+- slave1
+	port 6380
+	bind 0.0.0.0
+	replicaof masterip masterport
+	protected-mode no
+
+- slave2
+	port 6381
+	bind 0.0.0.0
+	replicaof masterip masterport
+	protected-mode no
+ 
+```
+
+```markdown
+# 2.启动3台机器进行测试
+先确定没有其他redis在运行
+- cd /usr/redis/bin
+- ./redis-server /root/master/redis.conf
+- ./redis-server /root/slave1/redis.conf
+- ./redis-server /root/slave2/redis.conf
+```
+
+从节点只负责同步主节点的数据，在配置中也可以强行关闭只读，但是不建议
+
+主从复制不能做故障转移，即主节点宕机从节点不能变为主节点，所以主从复制并不常用
+
+## 10. Redis哨兵机制
+
+### 10.1 哨兵Sentinel机制
+
+ Sentinel（哨兵）是Redis 的高可用性解决方案：由一个或多个Sentinel 实例 组成的Sentinel 系统可以监视任意多个主服务器  ，以及这些主服务器属下的所有从服务器，并在被监视的主服务器进入下线状态时，  自动将下线主服务器属下的某个从服务器升级为新的主服务器。简单的说哨兵就是带有**自动故障转移功能的主从架构**。 
+
+ **无法解决: 1.单节点并发压力问题 2.单节点内存和磁盘物理上限** ，想解决就使用集群
+
+### 10.2 哨兵架构原理
+
+ ![在这里插入图片描述](redis.assets/20201210000628255.png) 
+
+宕机的原来的Master节点恢复后会变为新master的从节点
+
+### 10.3 搭建哨兵架构
+
+在主从复制的架构基础上
+
+超过半数的哨兵确认master宕机后才能开始选举
+
+![1660048118350](redis.assets/1660048118350.png)
+
+```markdown
+# 1.在主节点上创建哨兵配置
+- 在Master对应redis.conf同目录下新建sentinel.conf文件，名字绝对不能错；
+
+# 2.配置哨兵，在sentinel.conf文件中填入内容：
+- sentinel monitor 被监控数据库名字（自己起名字（这个主从架构的名字）） ip port 1（代表哨兵的数量）
+
+# 3.启动哨兵模式进行测试
+从源码中复制启动脚本、
+cd redis-7.0.4/
+cd src
+cp redis-sentinel /usr/redis/bin/
+- redis-sentinel  /root/sentinel/sentinel.conf
+	说明:这个后面的数字2,是指当有两个及以上的sentinel服务检测到master宕机，才会去执行主从切换的功能。
+```
+
+复制脚本
+
+![1660048220136](redis.assets/1660048220136.png)
+
+新版redis好像已经有了，不需要复制
+
+启动，想修改port可以在文件中修改
+
+![1660048422556](redis.assets/1660048422556.png)
+
+宕机master后
+
+![1660048612289](redis.assets/1660048612289.png)
+
+### 10.4 通过springboot操作哨兵
+
+```markdown
+# redis sentinel 配置
+# master书写是使用哨兵监听的那个名称
+spring.redis.sentinel.master=mymaster
+# 连接的不再是一个具体redis主机,书写的是多个哨兵节点，多个用逗号隔开
+spring.redis.sentinel.nodes=192.168.122.100:26379
+```
+
+- **注意:如果连接过程中出现如下错误:RedisConnectionException: DENIED Redis is running in protected mode because protected mode is enabled, no bind address was specified, no authentication password is requested to clients. In this mode connections are only accepted from the loopback interface. If you want to connect from external computers to Redis you may adopt one of the following solutions: 1) Just disable protected mode sending the command ‘CONFIG SET protected-mode no’ from the loopback interface by connecting to Redis from the same host the server is running, however MAKE SURE Redis is not publicly accessible from internet if you do so. Use CONFIG REWRITE to make this change permanent. 2)**
+
+- **解决方案:在  哨兵  的配置文件中加入bind 0.0.0.0 开启远程连接权限**
