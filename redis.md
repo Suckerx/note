@@ -1868,3 +1868,222 @@ spring.redis.sentinel.nodes=192.168.122.100:26379
 - **注意:如果连接过程中出现如下错误:RedisConnectionException: DENIED Redis is running in protected mode because protected mode is enabled, no bind address was specified, no authentication password is requested to clients. In this mode connections are only accepted from the loopback interface. If you want to connect from external computers to Redis you may adopt one of the following solutions: 1) Just disable protected mode sending the command ‘CONFIG SET protected-mode no’ from the loopback interface by connecting to Redis from the same host the server is running, however MAKE SURE Redis is not publicly accessible from internet if you do so. Use CONFIG REWRITE to make this change permanent. 2)**
 
 - **解决方案:在  哨兵  的配置文件中加入bind 0.0.0.0 开启远程连接权限**
+
+## 11. Redis集群
+
+### 11.1 集群
+
+ Redis在3.0后开始支持Cluster(模式)模式,目前redis的集群支持节点的自动发现,支持slave-master选举和容错,支持在线分片(sharding shard )等特性。reshard 
+
+### 11.2 集群架构图
+
+ ![在这里插入图片描述](redis.assets/20201210000729174.png) 
+
+### 11.3 集群细节
+
+```markdown
+- 所有的redis节点彼此互联(PING-PONG机制),内部使用二进制协议优化传输速度和带宽.
+- 某个节点的fail是通过集群中超过半数的节点检测失效时才生效.  所以节点一般奇数 
+- 客户端与redis节点直连,不需要中间proxy层.客户端不需要连接集群所有节点,连接集群中任何一个可用节点即可
+- redis-cluster把所有的物理节点映射到[0-16383]slot上,cluster 负责维护node<->slot<->value
+```
+
+ ![在这里插入图片描述](redis.assets/20201210000756727.png)
+
+node是物理节点，即提供服务的master节点，slave是用于备份的从节点 
+
+CRC16算法类似哈希函数，由此解决单节点物理上限问题
+
+### 11.4 集群搭建
+
+ 判断一个是集群中的节点是否可用,是集群中的所用主节点选举过程,如果半数以上的节点认为当前节点挂掉,那么当前节点就是挂掉了,所以搭建redis集群时建议节点数最好为奇数，**搭建集群至少需要三个主节点,三个从节点,至少需要6个节点**。 
+
+先安装ruby脚本依赖
+
+```markdown
+# 1.准备环境安装ruby以及redis集群依赖
+- yum install -y ruby rubygems
+- gem install redis-xxx.gem 
+```
+
+ 第二步是要安装一个 redis 的 gem，这个要自己下载然后上传上去再使用命令安装![在这里插入图片描述](redis.assets/20201210000846563.png) 
+
+```markdown
+# 2.在一台机器创建7个目录
+```
+
+ ![在这里插入图片描述](redis.assets/20201210000912449.png) 
+
+```markdown
+# 3.每个目录复制一份配置文件
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7000/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7001/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7002/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7003/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7004/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7005/
+[root@localhost ~]# cp redis-4.0.10/redis.conf 7006/
+```
+
+ ![在这里插入图片描述](redis.assets/20201210000929920.png) 
+
+```markdown
+# 4.修改不同目录配置文件
+- port 	6379 .....                		 //修改端口
+- bind  0.0.0.0                   		 //开启远程连接
+- daemonize yes                        //开启守护进程，启动后在后台运行，不再占用窗口
+- dbfilename  dump-7000.rdb              //修改快照文件名，否则在一台机器上都叫一个名字会出问题
+- cluster-enabled  yes 	        			 //开启集群模式
+- cluster-config-file  nodes-port.conf //集群节点配置文件名修改
+- cluster-node-timeout  5000      	   //集群节点超时时间
+- appendonly  yes   		               //开启AOF持久化
+- appendfilename  "appendonly-7000.aof"     //修改文件名同上
+- pidfile  /var/run/redis_7000.pid         //修改redis进程文件名
+
+# 5.指定不同目录配置文件启动七个节点
+- [root@localhost bin]# ./redis-server  /root/7000/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7001/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7002/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7003/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7004/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7005/redis.conf
+- [root@localhost bin]# ./redis-server  /root/7006/redis.conf
+```
+
+ ![在这里插入图片描述](redis.assets/20201210000949208.png) 
+
+```markdown
+# 6.查看进程
+- [root@localhost bin]# ps aux|grep redis
+```
+
+ ![在这里插入图片描述](redis.assets/20201210001005273.png) 
+
+#### 1.创建集群
+
+--replicas表示创建副本节点，1 表示每个主节点有一个从节点，而总共6台，所以将前三个当作从节点
+
+```markdown
+# 1.复制集群操作脚本到bin目录中
+- cd redis-xxx.10/src/
+- [root@localhost src]# cp redis-trib.rb /usr/redis/bin/
+
+# 2.创建集群
+- ./redis-trib.rb create --replicas 1 192.168.202.205:7000 192.168.202.205:7001 192.168.202.205:7002 192.168.202.205:7003 192.168.202.205:7004 192.168.202.205:7005
+```
+
+ ![在这里插入图片描述](redis.assets/20201210001026570.png) 
+
+```markdown
+# 3.集群创建成功出现如下提示
+```
+
+ ![在这里插入图片描述](redis.assets/20201210001045590.png) 
+
+#### 2.查看集群状态
+
+```markdown
+# 1.查看集群状态 check [原始集群中任意节点] [无]
+- ./redis-trib.rb check 192.168.202.205:7000
+
+# 连接集群
+- ./redis-cli -p 7000(任意一个节点) -c
+
+# 2.集群节点状态说明
+- 主节点 
+	主节点存在hash slots,且主节点的hash slots 没有交叉
+	主节点不能删除
+	一个主节点可以有多个从节点
+	主节点宕机时多个副本之间自动选举主节点
+
+- 从节点
+	从节点没有hash slots
+	从节点可以删除
+	从节点不负责数据的写,只负责数据的同步
+```
+
+![1660113355205](redis.assets/1660113355205.png)
+
+#### 3.添加主节点
+
+```markdown
+# 1.添加主节点 add-node [新加入节点] [原始集群中任意节点]
+- ./redis-trib.rb  add-node 192.168.1.158:7006  192.168.1.158:7005
+- 注意:
+	1.该节点必须以集群模式启动
+	2.默认情况下该节点就是以master节点形式添加
+```
+
+#### 4.添加从节点
+
+```markdown
+# 1.添加从节点 add-node --slave [新加入节点] [集群中任意节点]
+- ./redis-trib.rb  add-node --slave 192.168.1.158:7006 192.168.1.158:7000
+- 注意:
+	当添加副本节点时没有指定主节点,redis会随机给副本节点较少的主节点添加当前副本节点
+	
+# 2.为确定的master节点添加主节点 add-node --slave --master-id master节点id [新加入节点] [集群任意节点]
+- ./redis-trib.rb  add-node --slave --master-id 3c3a0c74aae0b56170ccb03a76b60cfe7dc1912e 127.0.0.1:7006  127.0.0.1:7000
+
+```
+
+#### 5.删除副本节点
+
+```markdown
+# 1.删除节点 del-node [集群中任意节点] [删除节点id]
+- ./redis-trib.rb  del-node 127.0.0.1:7002 0ca3f102ecf0c888fc7a7ce43a13e9be9f6d3dd1
+- 注意:
+ 1.被删除的节点必须是从节点或没有被分配hash slots的节点
+
+```
+
+#### 6.集群在线分片
+
+```markdown
+# 1.在线分片 reshard [集群中任意节点] [无]
+- ./redis-trib.rb  reshard  192.168.1.158:7000
+```
+
+**7. springboot操作集群**
+
+配置文件
+
+![1660113658404](redis.assets/1660113658404.png)
+
+写一个节点就可以了，但是最好写上全部，避免刚好该节点宕机而出现问题
+
+## 12.Redis实现分布式Session管理
+
+### 12.1 管理机制
+
+ **redis的session管理是利用spring提供的session管理解决方案,将一个应用session交给Redis存储,整个应用中所有session的请求都会去redis中获取对应的session数据。** 
+
+ ![在这里插入图片描述](redis.assets/20201210001108236.png) 
+
+### 12.2 开发Session管理
+
+#### 1. 引入依赖
+
+```xml
+<dependency>
+  <groupId>org.springframework.session</groupId>
+  <artifactId>spring-session-data-redis</artifactId>
+</dependency>
+```
+
+#### 2. 开发Session管理配置类
+
+```java
+@Configuration
+@EnableRedisHttpSession
+public class RedisSessionManager {
+   
+}
+```
+
+#### 3.打包测试即可
+
+每次改变了都要同步到redis中，否则一直都是第一次redis中存储的内容
+
+![1660118431093](redis.assets/1660118431093.png)
+
