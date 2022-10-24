@@ -228,4 +228,349 @@ partition就是荷兰国旗问题
 
 ![1666345354135](algorithm.assets/1666345354135.png)
 
-思路：先把前几个数放到小根堆中，每次弹出一个数放到数组中，然后新加一个数方到堆中，每次弹出的就是最小值
+思路：先把前几个数放到小根堆中，每次弹出一个数放到数组中，然后新加一个数放到堆中，每次弹出的就是最小值
+
+**比较器**
+
+![1666363847555](algorithm.assets/1666363847555.png)
+
+![1666592753793](algorithm.assets/1666592753793.png)
+
+可以改写成容易理解的样子
+
+![1666592820385](algorithm.assets/1666592820385.png)
+
+就是如果第一个参数更小就返回负数，第一个更大则返回正数，这就是升序
+
+![1666593065643](algorithm.assets/1666593065643.png)
+
+如果是Id降序则用第二个参数-第一个参数
+
+![1666593122750](algorithm.assets/1666593122750.png)
+
+比较器还能用在堆之类的结构中，传个比较器
+
+大根堆就是用第二个参数减第一个
+
+![1666593872284](algorithm.assets/1666593872284.png)
+
+复杂数据，自己定义的类，用这种方式会很方便
+
+**桶排序**
+
+桶可以是任意数据结构，这题我们用队列
+
+对这几个数进行补全，补成3位数，然后按照个位数放到桶里
+
+![1666594735940](algorithm.assets/1666594735940.png)
+
+然后从头开始倒出来
+
+![1666594752384](algorithm.assets/1666594752384.png)
+
+先进桶的先出来，队列先进先出
+
+然后根据十位数再放进桶里面
+
+![1666594804548](algorithm.assets/1666594804548.png)
+
+再倒出来
+
+![1666594819163](algorithm.assets/1666594819163.png)
+
+再按照百位数进桶
+
+![1666594832513](algorithm.assets/1666594832513.png)
+
+再倒出来就排好序了
+
+![1666594846138](algorithm.assets/1666594846138.png)
+
+![1666595099362](algorithm.assets/1666595099362.png)
+
+![1666595115177](algorithm.assets/1666595115177.png)
+
+digit参数表示这些数中最大的数字有几个十进制位
+
+![1666595166072](algorithm.assets/1666595166072.png)
+
+![1666596160217](algorithm.assets/1666596160217.png)
+
+这里不是用桶搞得，是优化了很多，但是思想是这样得，用得是词频表，个位数是几就在下表处++
+
+![1666595329327](algorithm.assets/1666595329327.png)
+
+然后让他变成前缀和数组，所以现在下标2的4变成了个位数小于等于2的数有4个
+
+![1666595437309](algorithm.assets/1666595437309.png)
+
+此时我们从右往左看，062这个数，是最右侧，他一定是最后一个进桶的，根据先进先出，而个位数小于等于2的数只有4个，所以062一定是在help数组的下标3位置(即第四个数)，然后词频-1
+
+![1666595655355](algorithm.assets/1666595655355.png)
+
+以此类推
+
+![1666595708453](algorithm.assets/1666595708453.png)
+
+**排序算法的稳定性及其汇总**
+
+![1666596346803](algorithm.assets/1666596346803.png)
+
+稳定性指的是，相同的元素能否保证在排序完后保证其原来次序不变
+
+![1666597159455](algorithm.assets/1666597159455.png)
+
+一般都会选择快速排序，能用快排就用快排
+
+![1666597318865](algorithm.assets/1666597318865.png)
+
+![1666597524621](algorithm.assets/1666597524621.png)
+
+例如快排加上一段
+
+![1666597559468](algorithm.assets/1666597559468.png)
+
+就是小样本量时，我们直接用插入排序，更快，这种叫综合排序
+
+系统提供的Array.sort，如果是基础数据类型，就会用快排，如果是非基础数据类型就用归并，因为要稳定性
+
+## 链表
+
+![1666598588661](algorithm.assets/1666598588661.png)
+
+hashSet没有值，只有key，hashMap有value，第一次是添加，第二次是更新
+
+哈希表的所有增删改查时间复杂度都是常数级别
+
+![1666598725271](algorithm.assets/1666598725271.png)
+
+不是基础类型，内存占用就是8字节
+
+![1666598931104](algorithm.assets/1666598931104.png)
+
+所以这里的nodeA和nodeB不一样
+
+![1666599917233](algorithm.assets/1666599917233.png)
+
+有序表，根据key组织
+
+有序表的增删改查都是O(logN)
+
+![1666600055763](algorithm.assets/1666600055763.png)
+
+不是基础类型，没给比较器会报错
+
+![1666600135968](algorithm.assets/1666600135968.png)
+
+**单链表**
+
+![1666600204581](algorithm.assets/1666600204581.png)
+
+![1666600272499](algorithm.assets/1666600272499.png)
+
+如果有换头操作，则需要返回头节点
+
+![1666600727143](algorithm.assets/1666600727143.png)
+
+```java
+package com.zzw.test;
+
+/**
+ * @program: HashMapTest
+ * @description: 双向链表反转
+ * @author: zhaozhenwei
+ * @create: 2021-05-30 10:55
+ **/
+public class DoubleListInversion {
+
+    public static void main(String[] args) {
+        DoubleNode listInversion = createListInversion();
+        printListInversion(listInversion);
+        printListInversion(inversion(listInversion));
+
+    }
+
+    /**
+     * 链表反转
+     *  currentNode 当前处理的节点
+     *  previous    处理的上一个节点     初始情况下为null
+     *  next        要处理的下一个节点    初始情况下为第一个节点的下一个节点
+     *   通过死循环进行处理，跳出判断放在循环内
+     *   将当前节点的上一个节点currentNode.previous执行要处理的下一个节点next
+     *   将当前节点的下一个节点currentNode.next指向上次处理的节点previous
+     *   此时当前节点处理完成，进行下一个节点处理的初始化
+     *      previous指向当前处理的节点currentNode
+     *      判断当前节点currentNode的下一个节点next是否为null，如果为null说明当前节点currentNode是最后一个节点，跳出循环
+     *          如果不为null，将下一个节点指向next.next
+     * @param node
+     * @return
+     */
+    public static DoubleNode inversion(DoubleNode node) {
+        if (null == node) {
+            throw new RuntimeException("反转链表起始节点不能为null");
+        }
+        // 当前节点
+        DoubleNode currentNode = node;
+        // 上个节点
+        DoubleNode previous = null;
+        // 下个节点
+        DoubleNode next = currentNode.next;
+        while (true) {
+            currentNode.previous = next;
+            currentNode.next = previous;
+            previous = currentNode;
+            if (null == next) {
+                break;
+            }
+            currentNode = next;
+            next = next.next;
+        }
+        return previous;
+    }
+
+    /**
+     * 打印链表
+     * @param node
+     */
+    static void printListInversion(DoubleNode node) {
+        DoubleNode currentNode = node;
+        while (null != currentNode) {
+            System.out.println(currentNode);
+            currentNode = currentNode.next;
+        }
+        System.out.println();
+    }
+
+    /**
+     * 创建链表
+     * @return
+     */
+    static DoubleNode createListInversion() {
+        DoubleNode n1 = new DoubleNode(1);
+        DoubleNode n2 = new DoubleNode(2);
+        DoubleNode n3 = new DoubleNode(3);
+        DoubleNode n4 = new DoubleNode(4);
+        DoubleNode n5 = new DoubleNode(5);
+
+        n1.previous = null;
+        n1.next = n2;
+
+        n2.previous = n1;
+        n2.next = n3;
+
+        n3.previous = n2;
+        n3.next = n4;
+
+        n4.previous = n3;
+        n4.next = n5;
+
+        n5.previous = n4;
+        n5.next = null;
+
+        return n1;
+    }
+
+
+}
+
+
+
+class DoubleNode {
+    int value;
+    DoubleNode previous;
+    DoubleNode next;
+    public DoubleNode(int value) {
+        this.value = value;
+    }
+
+    @Override
+    public String toString() {
+        return "DoubleNode{"
+                + "previous: " + (null == previous ? "null" : previous.value) +
+                "\tvalue=" + value
+                + "\tnext:" + (null == next ? "null" : next.value) + "}";
+    }
+}
+
+```
+
+
+
+![1666600353231](algorithm.assets/1666600353231.png)
+
+谁小谁移动，相同就打印然后一起移动
+
+![1666601112618](algorithm.assets/1666601112618.png)
+
+![1666601171484](algorithm.assets/1666601171484.png)
+
+用个栈然后遍历比较就行
+
+可以只放右侧进栈就行，可以省一半空间，此时需要使用快慢指针技巧，快指针一次走两步，慢指针一次一步，快指针到终点的时候，慢指针就在中间了
+
+![1666601536490](algorithm.assets/1666601536490.png)
+
+可能边界条件不同，还分奇偶
+
+如果只用几个变量，不用额外空间
+
+![1666601713809](algorithm.assets/1666601713809.png)
+
+使用快慢指针，慢指针到中点，然后继续遍历时，让中点指向空，其他的反转，然后用变量记住头节点和尾节点，然后他们同时往中间走，每一步都一样即可，有一个走到空就停，但是返回结果前要把链表恢复
+
+方法一：
+
+![1666601905145](algorithm.assets/1666601905145.png)
+
+![1666601952442](algorithm.assets/1666601952442.png)
+
+方法二：
+
+![1666601993204](algorithm.assets/1666601993204.png)![1666602120750](algorithm.assets/1666602120750.png)
+
+
+
+![1666602161560](algorithm.assets/1666602161560.png)
+
+思路：笔试就直接申请一个Node类型数组，然后在数组中进行划分，然后再遍历链接即可
+
+进阶：使用6个变量，分别是小于部分的头指针和尾指针，等于部分的头指针和尾指针，大于部分的头指针和尾指针，一开始都指向空，在遇到第一个时则将头尾都指向它，然后第二个时，将第一个指向第二个，然后尾指针指向第二个，最终让小于部分的最后那个节点指向等于部分的头节点，等于部分的尾节点指向大于部分的头节点即可
+
+![1666602499890](algorithm.assets/1666602499890.png)
+
+注意一定要考虑边界，有可能没有小于部分
+
+方法一：
+
+![1666602746364](algorithm.assets/1666602746364.png)
+
+![1666602789312](algorithm.assets/1666602789312.png)
+
+![1666602802698](algorithm.assets/1666602802698.png)
+
+方法二：
+
+![1666602723500](algorithm.assets/1666602723500.png)
+
+![1666602868725](algorithm.assets/1666602868725.png)
+
+![1666602881912](algorithm.assets/1666602881912.png)
+
+
+
+![1666602916913](algorithm.assets/1666602916913.png)
+
+使用一个map，key为老节点，value为新复制的节点，遍历每一个老节点将其放到map中，然后开始设置指针连接方向
+
+![1666614270415](algorithm.assets/1666614270415.png)
+
+方法二：不用map，直接用新的节点接到老节点后面，不管rand指针
+
+![1666614460384](algorithm.assets/1666614460384.png)
+
+然后，遍历的时候一对一对拿，拿1和1`，只考虑其rand指针，通过1的rand指针得到3，此时3后面就是1撇得rand指针3撇，最后分离next指针
+
+![1666614717925](algorithm.assets/1666614717925.png)
+
+![1666614760435](algorithm.assets/1666614760435.png)
+
