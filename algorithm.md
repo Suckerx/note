@@ -1912,6 +1912,14 @@ b&1是看最后一位是不是0，如果是0，那么res就不加，然后a左�
 
 ![1672822627034](algorithm.assets/1672822627034.png)
 
+除法位运算代码未考虑溢出状况
+
+https://blog.csdn.net/qq_43156556/article/details/122331309
+
+ [. - 力扣（Leetcode）](https://leetcode.cn/problems/xoh6Oh/?envType=study-plan&id=lcof-ii&plan=lcof&plan_progress=fr3jbsm) 
+
+![1677400686914](algorithm.assets/1677400686914.png)
+
 **补充大数据求余方法：**
 
 1. 循环求余
