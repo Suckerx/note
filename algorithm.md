@@ -1529,26 +1529,63 @@ cn也代表当前 i-1 的信息是多少
 
 ----
 
-## Manacher算法
+## Manacher算法(解决最长回文子串)
 
 ![1671947681820](algorithm.assets/1671947681820.png)
 
-暴力解法可以使用双指针遍历每个字符然后往两边进行判断，但是这样的情况无法判断偶数回文
+暴力解法可以使用双指针遍历每个字符然后往两边进行判断，但是这样的情况无法判断偶数回文，实际上可以
+
+ [剑指 Offer II 020. 回文子字符串的个数 - 力扣（Leetcode）](https://leetcode.cn/problems/a7VOhD/description/?envType=study-plan&id=lcof-ii&plan=lcof&plan_progress=fr3jbsm&languageTags=java) 
+
+```java
+    /**
+     * 遍历字符串，对每个字符，都看作回文的中心，向两端延申进行判断直到非回文。
+     * 回文的中心可能是一个字符，也可能是两个字符。
+     * 注意双指针可能越界。
+     */
+    public int countSubstrings2(String s) {
+        if (s == null || s.length() == 0) {
+            return 0;
+        }
+        int count = 0;
+        //字符串的每个字符都作为回文中心进行判断，中心是一个字符或两个字符
+        for (int i = 0; i < s.length(); ++i) {
+            count += countPalindrome(s, i, i);
+            count += countPalindrome(s, i, i+1);
+        }
+        return count;
+    }
+
+    //从字符串的第start位置向左，end位置向右，比较是否为回文并计数
+    private int countPalindrome(String s, int start, int end) {
+        int count = 0;
+        while (start >= 0 && end < s.length() && s.charAt(start) == s.charAt(end)) {
+            count++;
+            start--;
+            end++;
+        }
+        return count;
+    }
+```
+
+
 
 ![1671948130866](algorithm.assets/1671948130866.png)
 
 对字符串加上特殊字符进行处理，每个字符再计算，就可以完全找到所有回文串，将找到的个数除以2即可得到答案(向下取整)，特殊字符随便加，可以在原来字符串中出现过
 
+这里我们遍历每个字符，以它为轴来看能不能向左右两边扩散，扩散出去的长度是多少，比如第一个#，扩不了，答案为1，然后到字符1，向两边扩散可以得到最长回文子串长度为3，然后继续走，最终得到最长的结果，然后 / 2，向下取整得到真实结果
+
 这是经典解法，时间复杂度是O(N^2)，但是我们可以进行加速
 
 先明确几个概念：
 
-- 回文直径和回文半径，就是整个的长度和除以二向上取整
+- 回文直径和回文半径，就是以一个字符为中心，扩出去的整个的长度除以二向上取整就是半径
 - 做一个辅助数组，把每个回文半径记录下来
 
 ![1671948530844](algorithm.assets/1671948530844.png)
 
-- 定义一个变量 R ，记录每次找到回文串的最右侧边界的最大值，每次更新
+- 定义一个变量 R ，记录每次找到回文串的最右侧边界的的位置的最大值，每次更新
 
 - 变量 C ，记录每次R更新后的回文串中心点位置
 
@@ -1590,11 +1627,21 @@ cn也代表当前 i-1 的信息是多少
 
 ![1671952485114](algorithm.assets/1671952485114.png)
 
-for循环里面第一句是处理不用验证的区域，用min是求至少的
+for循环里面第一句是处理不用验证的区域，用min是求至少的，注意这里R的意义是右边界再右边一个位置
 
-while循环是把所有情况都往外面扩展，就算遇到不用扩的情况，也只会失败一次
+第一句，如果 i>R，那么只能暴力扩，所以至少是1。如果R > i，那么几种情况中，2*C - i 是 i`的位置
 
-最后是求得最大得回文半径-1就得到最大回文串长度
+![1678097802892](algorithm.assets/1678097802892.png)
+
+while循环是把所有情况都往外面扩展，就算遇到不用扩的情况(有两种情况不用扩)，也只会失败一次
+
+最后是求得最大得回文半径-1就得到最大回文串长度，原串长度就是最大回文半径-1，而要是求回文子串个数，就是（最大原串长度 - 1）/ 2 得到
+
+ [剑指 Offer II 020. 回文子字符串的个数 - 力扣（Leetcode）](https://leetcode.cn/problems/a7VOhD/description/?envType=study-plan&id=lcof-ii&plan=lcof&plan_progress=fr3jbsm&languageTags=java) 
+
+```java
+
+```
 
 ----
 
